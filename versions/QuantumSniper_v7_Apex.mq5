@@ -30,10 +30,10 @@ input int      InpNewsBufferMinsAfter  = 30;         // Pause Trading After High
 input bool     InpFilterUSDOnly        = true;       // Filter USD News (Critical for Gold XAUUSD)
 
 input group "=== 3. TRADING SESSION & TIME FILTER ==="
-input bool     InpUseSessionFilter     = true;       // Enable Active Trading Hours Filter
+input bool     InpUseSessionFilter     = false;      // Enable Active Trading Hours Filter (24/7 Mode)
 input int      InpTradeHourStart       = 13;         // Start Hour (Server Time, ~London Open)
 input int      InpTradeHourEnd         = 23;         // End Hour (Server Time, ~NY Close)
-input bool     InpCloseFridayNight     = true;       // Avoid Weekend Gaps (No new trades late Friday)
+input bool     InpCloseFridayNight     = false;      // Avoid Weekend Gaps (Weekend Trading Allowed)
 
 
 input group "=== 4. VISUAL SMC CHART ENGINE ==="
