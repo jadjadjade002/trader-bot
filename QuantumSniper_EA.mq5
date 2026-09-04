@@ -690,11 +690,7 @@ void CheckAndExecuteInstitutionalTrade(bool sqzOn, bool sqzOff, double sqzVal, d
       g_lastSignalReason = "🚫 SELL Rejected (H1 is BULLISH)";
       return;
    }
-   if(InpUseHTFFilter && htfBias == 0)
-   {
-      g_lastSignalReason = "🚫 Choppy H1 Market - Standing By";
-      return;
-   }
+   // FIX: If H1 is neutral/ranging (htfBias == 0), ALLOW trade! Only block direct counter-trend (buy in bear, sell in bull).
 
    // --- BUY EXECUTION ---
    if(buySignal)
