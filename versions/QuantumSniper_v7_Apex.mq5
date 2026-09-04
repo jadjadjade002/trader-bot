@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
-//|                                QuantumSniper_v7_Apex.mq5|
-//|            v7.0 Institutional Apex Edition                     |
+//|                                QuantumSniper_v8_Titan.mq5|
+//|            v8.0 Institutional Titan Edition                     |
 //|      MQL5 Economic News Filter + H1 Trend + SMC + SQZ + Safety   |
 //|                    Chief Engineer: Gemini Quantum                |
 //+------------------------------------------------------------------+
 #property copyright "QuantumSniper Institutional v6.0"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "7.00"
+#property version   "8.00"
 #property description "v6.0: Native MQL5 News Calendar Engine, Session Filter, Strict SMC & SQZ Confluence, Stepped Trailing, Auto Chart Visualizer"
 
 #include <Trade\Trade.mqh>
@@ -69,10 +69,19 @@ input double   InpOB_BodyRatio         = 0.6;        // Displacement Body-to-Ran
 input group "=== 7. EXECUTION, RISK & TRAILING MANAGEMENT ==="
 input double   InpFixedLot             = 0.01;       // Lot Size (0.01 Recommended for  Port)
 input double   InpRiskRewardRatio      = 1.8;        // Target Risk:Reward Ratio
-input double   InpBreakEvenTriggerR    = 0.8;        // Break-Even Activation at 0.8R Profit
+input double   InpBreakEvenTriggerR    = 0.4;        // Break-Even Activation at 0.4R Profit (Locks in wins early)
 input bool     InpUseTrailingStop      = true;       // Enable Dynamic Stepped Trailing Stop
 input double   InpTrailingTriggerR     = 1.2;        // Trailing Activation at 1.2R Profit
 input int      InpCooldownBars         = 3;          // Post-Trade Cooldown (Bars)
+
+input group "=== 8. RSI ANTI-CHOP & OVERBOUGHT/OVERSOLD FILTER ==="
+input bool     InpUseRSIFilter         = true;       // Enable RSI Anti-Chop Filter
+input int      InpRsiPeriod            = 14;         // RSI Period
+input double   InpRsiMaxBuy            = 65.0;       // Max RSI for BUY (Block buying overbought top)
+input double   InpRsiMinSell           = 35.0;       // Min RSI for SELL (Block selling oversold bottom)
+
+input group "=== 9. TIMEFRAME NOISE GUARD ==="
+input bool     InpBlockM1              = true;       // Block Trading on M1 (Enforce M5/M15 Institutional)
 
 
 #define OBJ_PREFIX "QS_APEX_"
@@ -115,7 +124,7 @@ void DrawTradeMarker(string name, datetime t, double p, bool isBuy)
 
 void SendQuantAlert(string title, string msg)
 {
-   string fullMsg = "⚡ [QuantumSniper Apex 7.0]\n" + title + "\n" + msg;
+   string fullMsg = "⚡ [QuantumSniper Titan 8.0]\n" + title + "\n" + msg;
    if(InpSendPopAlerts) Alert(fullMsg);
    if(InpSendPushAlerts) SendNotification(fullMsg);
    Print("📢 QUANT ALERT: ", title, " | ", msg);
@@ -129,6 +138,8 @@ CSymbolInfo    m_symbol;
 int            h_atr;
 int            h_htf_emaFast;
 int            h_htf_emaSlow;
+int            h_rsi;
+double         g_lastRsi       = 50.0;
 
 datetime       m_lastBarTime;
 double         m_startingDailyEquity;
@@ -162,7 +173,7 @@ bool           g_isSqzFired      = false;
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   if(InpDemoOnly && AccountInfoInteger(ACCOUNT_TRADE_MODE) != ACCOUNT_TRADE_MODE_DEMO)
+   if(InpDemoOnly && AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_REAL)
    {
       Alert("❌ CRITICAL: EA is configured for DEMO testing only!");
       return(INIT_FAILED);
@@ -181,6 +192,13 @@ int OnInit()
 
    h_atr = iATR(_Symbol, _Period, 14);
    if(h_atr == INVALID_HANDLE) return(INIT_FAILED);
+
+   h_rsi = iRSI(_Symbol, _Period, InpRsiPeriod, PRICE_CLOSE);
+   if(h_rsi == INVALID_HANDLE)
+   {
+      Print("? Failed to initialize RSI handle");
+      return(INIT_FAILED);
+   }
 
    h_htf_emaFast = iMA(_Symbol, InpHTF_Period, InpHTF_EMA_Fast, 0, MODE_EMA, PRICE_CLOSE);
    h_htf_emaSlow = iMA(_Symbol, InpHTF_Period, InpHTF_EMA_Slow, 0, MODE_EMA, PRICE_CLOSE);
@@ -209,6 +227,7 @@ int OnInit()
 void OnDeinit(const int reason)
 {
    IndicatorRelease(h_atr);
+   IndicatorRelease(h_rsi);
    IndicatorRelease(h_htf_emaFast);
    IndicatorRelease(h_htf_emaSlow);
    CleanVisualObjects();
@@ -222,7 +241,17 @@ bool IsInHighImpactNewsWindow(string &newsEventName)
 {
    if(!InpUseNewsFilter) return false;
 
+   static datetime s_lastCheckTime = 0;
+   static bool     s_cachedResult  = false;
+   static string   s_cachedEvent   = "";
+
    datetime serverTime = TimeTradeServer();
+   if(serverTime - s_lastCheckTime < 30 && s_lastCheckTime > 0)
+   {
+      newsEventName = s_cachedEvent;
+      return s_cachedResult;
+   }
+
    datetime timeFrom = serverTime - (InpNewsBufferMinsAfter * 60);
    datetime timeTo   = serverTime + (InpNewsBufferMinsBefore * 60);
 
@@ -230,7 +259,13 @@ bool IsInHighImpactNewsWindow(string &newsEventName)
    string currencyFilter = InpFilterUSDOnly ? "USD" : NULL;
 
    int count = CalendarValueHistory(values, timeFrom, timeTo, NULL, currencyFilter);
-   if(count <= 0) return false;
+   if(count <= 0)
+   {
+      s_lastCheckTime = serverTime;
+      s_cachedResult = false;
+      s_cachedEvent = "";
+      return false;
+   }
 
    for(int i = 0; i < count; i++)
    {
@@ -240,10 +275,16 @@ bool IsInHighImpactNewsWindow(string &newsEventName)
          if(event.importance == CALENDAR_IMPORTANCE_HIGH)
          {
             newsEventName = event.name + " [High Impact]";
+            s_lastCheckTime = serverTime;
+            s_cachedResult = true;
+            s_cachedEvent = newsEventName;
             return true;
          }
       }
    }
+   s_lastCheckTime = serverTime;
+   s_cachedResult = false;
+   s_cachedEvent = "";
    return false;
 }
 
@@ -509,6 +550,24 @@ void UpdateDailyTradeStats()
 }
 
 //+------------------------------------------------------------------+
+//| Institutional Lot Size Normalizer & Broker Step Validator        |
+//+------------------------------------------------------------------+
+double NormalizeLot(double lot)
+{
+   double step   = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+   double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+   double maxLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+   if(step <= 0)   step = 0.01;
+   if(minLot <= 0) minLot = 0.01;
+   if(maxLot <= 0) maxLot = 100.0;
+
+   double normalized = MathFloor(lot / step) * step;
+   if(normalized < minLot) normalized = minLot;
+   if(normalized > maxLot) normalized = maxLot;
+   return NormalizeDouble(normalized, 2);
+}
+
+//+------------------------------------------------------------------+
 //| Expert tick function                                             |
 //+------------------------------------------------------------------+
 void OnTick()
@@ -524,7 +583,7 @@ void OnTick()
    }
 
    double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
-   double dailyDD = ((m_startingDailyEquity - currentEquity) / m_startingDailyEquity) * 100.0;
+   double dailyDD = (m_startingDailyEquity > 0.0) ? (((m_startingDailyEquity - currentEquity) / m_startingDailyEquity) * 100.0) : 0.0;
 
    // Hard Equity Floor Protection
    if(currentEquity < InpHardEquityFloor)
@@ -565,7 +624,14 @@ void OnTick()
       return;
    }
 
-   // 7. Check New Candle Event
+   // 7. Timeframe Noise Guard (M1 Block)
+   if(InpBlockM1 && _Period == PERIOD_M1)
+   {
+      g_lastSignalReason = "?? M1 Blocked: Anti-Whipsaw Protection (Use M5/M15)";
+      return;
+   }
+
+   // 8. Check New Candle Event
    datetime currentBarTime = iTime(_Symbol, _Period, 0);
    if(currentBarTime == m_lastBarTime) return;
 
@@ -701,8 +767,9 @@ void CheckAndExecuteInstitutionalTrade(bool sqzOn, bool sqzOff, double sqzVal, d
       if(riskPoints <= 0) return;
 
       double tp = entryPrice + (riskPoints * InpRiskRewardRatio);
+      double tradeLot = NormalizeLot(InpFixedLot);
 
-      if(m_trade.Buy(InpFixedLot, _Symbol, entryPrice, sl, tp, "v6 BUY [News+SMC+SQZ]"))
+      if(m_trade.Buy(tradeLot, _Symbol, entryPrice, sl, tp, "v8 BUY [Titan-SMC-RSI]"))
       {
          if(m_trade.ResultRetcode() == TRADE_RETCODE_DONE || m_trade.ResultRetcode() == TRADE_RETCODE_PLACED)
          {
@@ -729,8 +796,9 @@ void CheckAndExecuteInstitutionalTrade(bool sqzOn, bool sqzOff, double sqzVal, d
       if(riskPoints <= 0) return;
 
       double tp = entryPrice - (riskPoints * InpRiskRewardRatio);
+      double tradeLot = NormalizeLot(InpFixedLot);
 
-      if(m_trade.Sell(InpFixedLot, _Symbol, entryPrice, sl, tp, "v6 SELL [News+SMC+SQZ]"))
+      if(m_trade.Sell(tradeLot, _Symbol, entryPrice, sl, tp, "v8 SELL [Titan-SMC-RSI]"))
       {
          if(m_trade.ResultRetcode() == TRADE_RETCODE_DONE || m_trade.ResultRetcode() == TRADE_RETCODE_PLACED)
          {
@@ -847,7 +915,7 @@ void UpdateQuantHUD(double dailyDD)
 {
    string accMode = (AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_DEMO) ? "DEMO (Safe)" : "REAL (Live)";
    string hud = "===========================================\n";
-   hud += "  ⚡ QUANTUM SNIPER v7.0 APEX EDITION ⚡\n";
+   hud += "  ⚡ QUANTUM SNIPER v8.0 TITAN EDITION ⚡\n";
    hud += "===========================================\n";
    hud += " Account Mode   : " + accMode + " ($" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) + ")\n";
    hud += " News Calendar  : " + g_newsStatusStr + "\n";
@@ -857,6 +925,8 @@ void UpdateQuantHUD(double dailyDD)
    hud += " LazyBear SQZ   : " + g_sqzStateStr + "\n";
    hud += " SQZ Momentum   : " + g_momColorStr + "\n";
    hud += " LuxAlgo SMC    : " + g_smcStateStr + "\n";
+   hud += " RSI (14)       : " + DoubleToString(g_lastRsi, 1) + "\n";
+   hud += " Timeframe Guard: " + (InpBlockM1 && _Period == PERIOD_M1 ? "BLOCKED (M1) ??" : "ACTIVE ??") + "\n";
    hud += "-------------------------------------------\n";
    hud += " Trades Today   : " + IntegerToString(g_dailyTradeCount) + "/" + IntegerToString(InpMaxTradesPerDay) + "\n";
    hud += " Losing Streak  : " + IntegerToString(g_losingStreak) + "/" + IntegerToString(InpMaxLosingStreak) + "\n";
