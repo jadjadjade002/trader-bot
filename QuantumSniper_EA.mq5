@@ -222,7 +222,17 @@ bool IsInHighImpactNewsWindow(string &newsEventName)
 {
    if(!InpUseNewsFilter) return false;
 
+   static datetime s_lastCheckTime = 0;
+   static bool     s_cachedResult  = false;
+   static string   s_cachedEvent   = "";
+
    datetime serverTime = TimeTradeServer();
+   if(serverTime - s_lastCheckTime < 30 && s_lastCheckTime > 0)
+   {
+      newsEventName = s_cachedEvent;
+      return s_cachedResult;
+   }
+
    datetime timeFrom = serverTime - (InpNewsBufferMinsAfter * 60);
    datetime timeTo   = serverTime + (InpNewsBufferMinsBefore * 60);
 
@@ -230,7 +240,13 @@ bool IsInHighImpactNewsWindow(string &newsEventName)
    string currencyFilter = InpFilterUSDOnly ? "USD" : NULL;
 
    int count = CalendarValueHistory(values, timeFrom, timeTo, NULL, currencyFilter);
-   if(count <= 0) return false;
+   if(count <= 0)
+   {
+      s_lastCheckTime = serverTime;
+      s_cachedResult = false;
+      s_cachedEvent = "";
+      return false;
+   }
 
    for(int i = 0; i < count; i++)
    {
@@ -240,10 +256,16 @@ bool IsInHighImpactNewsWindow(string &newsEventName)
          if(event.importance == CALENDAR_IMPORTANCE_HIGH)
          {
             newsEventName = event.name + " [High Impact]";
+            s_lastCheckTime = serverTime;
+            s_cachedResult = true;
+            s_cachedEvent = newsEventName;
             return true;
          }
       }
    }
+   s_lastCheckTime = serverTime;
+   s_cachedResult = false;
+   s_cachedEvent = "";
    return false;
 }
 
@@ -509,6 +531,24 @@ void UpdateDailyTradeStats()
 }
 
 //+------------------------------------------------------------------+
+//| Institutional Lot Size Normalizer & Broker Step Validator        |
+//+------------------------------------------------------------------+
+double NormalizeLot(double lot)
+{
+   double step   = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+   double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+   double maxLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+   if(step <= 0)   step = 0.01;
+   if(minLot <= 0) minLot = 0.01;
+   if(maxLot <= 0) maxLot = 100.0;
+
+   double normalized = MathFloor(lot / step) * step;
+   if(normalized < minLot) normalized = minLot;
+   if(normalized > maxLot) normalized = maxLot;
+   return NormalizeDouble(normalized, 2);
+}
+
+//+------------------------------------------------------------------+
 //| Expert tick function                                             |
 //+------------------------------------------------------------------+
 void OnTick()
@@ -524,7 +564,7 @@ void OnTick()
    }
 
    double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
-   double dailyDD = ((m_startingDailyEquity - currentEquity) / m_startingDailyEquity) * 100.0;
+   double dailyDD = (m_startingDailyEquity > 0.0) ? (((m_startingDailyEquity - currentEquity) / m_startingDailyEquity) * 100.0) : 0.0;
 
    // Hard Equity Floor Protection
    if(currentEquity < InpHardEquityFloor)
@@ -701,8 +741,9 @@ void CheckAndExecuteInstitutionalTrade(bool sqzOn, bool sqzOff, double sqzVal, d
       if(riskPoints <= 0) return;
 
       double tp = entryPrice + (riskPoints * InpRiskRewardRatio);
+      double tradeLot = NormalizeLot(InpFixedLot);
 
-      if(m_trade.Buy(InpFixedLot, _Symbol, entryPrice, sl, tp, "v6 BUY [News+SMC+SQZ]"))
+      if(m_trade.Buy(tradeLot, _Symbol, entryPrice, sl, tp, "v7 BUY [News+SMC+SQZ]"))
       {
          if(m_trade.ResultRetcode() == TRADE_RETCODE_DONE || m_trade.ResultRetcode() == TRADE_RETCODE_PLACED)
          {
@@ -729,8 +770,9 @@ void CheckAndExecuteInstitutionalTrade(bool sqzOn, bool sqzOff, double sqzVal, d
       if(riskPoints <= 0) return;
 
       double tp = entryPrice - (riskPoints * InpRiskRewardRatio);
+      double tradeLot = NormalizeLot(InpFixedLot);
 
-      if(m_trade.Sell(InpFixedLot, _Symbol, entryPrice, sl, tp, "v6 SELL [News+SMC+SQZ]"))
+      if(m_trade.Sell(tradeLot, _Symbol, entryPrice, sl, tp, "v7 SELL [News+SMC+SQZ]"))
       {
          if(m_trade.ResultRetcode() == TRADE_RETCODE_DONE || m_trade.ResultRetcode() == TRADE_RETCODE_PLACED)
          {
