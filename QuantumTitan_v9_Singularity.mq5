@@ -45,9 +45,9 @@ input double   InpShockMultiplier      = 2.2;        // ATR Volatility Shock Mul
 input ENUM_TIMEFRAMES InpHTF           = PERIOD_H1;  // Institutional Higher Timeframe Trend
 
 input group "=== 4. DYNAMIC TRAILING & SAFETY (vs 3Commas) ==="
-input double   InpBreakEvenTriggerR    = 0.4;        // Breakeven Activation (0.4R Profit)
-input double   InpTrailingTriggerR     = 1.2;        // Trailing Activation (1.2R Profit)
-input double   InpTrailingAtrMult      = 0.6;        // Dynamic Trailing Distance (ATR Multiplier)
+input double   InpBreakEvenTriggerR    = 0.35;       // Breakeven Activation (0.35R Profit)
+input double   InpTrailingTriggerR     = 0.75;       // Trailing Activation (0.75R Profit - Faster Profit Lock)
+input double   InpTrailingAtrMult      = 0.45;       // Dynamic Trailing Distance (ATR Multiplier)
 input double   InpSafetyBouncePoints   = 35.0;       // Trailing Buy Reversal Bounce (Points)
 
 input group "=== 5. ATR GEOMETRIC GRID & CASH BUFFER (vs Pionex) ==="
@@ -61,7 +61,7 @@ input double   InpBasketTpAtrMult      = 0.8;        // Basket Take Profit Targe
 input group "=== 6. VISUAL MATRIX HUD & TELEMETRY ==="
 input bool     InpEnableHUD            = true;       // Render Real-Time On-Chart HUD
 input bool     InpSendPushAlerts       = true;       // Send MT5 Mobile Push Notifications
-input bool     InpSendPopAlerts        = true;       // Send Terminal Popup Alerts
+input bool     InpSendPopAlerts        = false;      // Send Terminal Popup Alerts (Disabled to prevent blocking GUI modal)
 
 //+------------------------------------------------------------------+
 //| GLOBAL SYSTEM INSTANCES                                          |
@@ -116,8 +116,8 @@ int OnInit()
    else
       g_trade.SetTypeFilling(ORDER_FILLING_RETURN);
 
-   // 4. Main ATR Indicator for Execution Sizing
-   g_handleAtrMain = iATR(_Symbol, _Period, 14);
+   // 4. Main ATR Indicator for Execution Sizing (Strictly anchored to InpHTF H1)
+   g_handleAtrMain = iATR(_Symbol, InpHTF, 14);
    if(g_handleAtrMain == INVALID_HANDLE)
    {
       Print("❌ Failed to create main ATR handle");
@@ -172,6 +172,27 @@ int OnInit()
    Print("   • Module 4 (Risk Guardian)  : ACTIVE (HWM Loss: ", InpMaxDailyLossPct, "%, Floor: $", InpHardEquityFloor, ")");
    Print("   • Module 5 (Matrix HUD)     : ACTIVE");
    Print("══════════════════════════════════════════════════════════════");
+
+   // 10. Apply Institutional TradingView Dark Matrix Palette (User Theme Reference)
+   ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
+   ChartSetInteger(0, CHART_SHOW_GRID, false);
+   ChartSetInteger(0, CHART_SHOW_VOLUMES, CHART_VOLUME_TICK);
+   ChartSetInteger(0, CHART_SHIFT, true);
+   ChartSetDouble(0, CHART_SHIFT_SIZE, 15.0);
+   ChartSetInteger(0, CHART_AUTOSCROLL, true);
+   
+   ChartSetInteger(0, CHART_COLOR_BACKGROUND, C'19,23,34');      // Deep Slate Charcoal #131722
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, C'165,175,190');   // Soft Light Slate Axes
+   ChartSetInteger(0, CHART_COLOR_GRID, C'28,34,46');            // Grid
+   ChartSetInteger(0, CHART_COLOR_CHART_UP, C'38,166,154');      // TradingView Teal Green Wick
+   ChartSetInteger(0, CHART_COLOR_CHART_DOWN, C'239,83,80');     // TradingView Coral Red Wick
+   ChartSetInteger(0, CHART_COLOR_CANDLE_BULL, C'38,166,154');   // Teal Green Body
+   ChartSetInteger(0, CHART_COLOR_CANDLE_BEAR, C'239,83,80');   // Coral Red Body
+   ChartSetInteger(0, CHART_COLOR_CHART_LINE, C'38,166,154');
+   ChartSetInteger(0, CHART_COLOR_VOLUME, C'38,166,154');        // Volume Bars
+   ChartSetInteger(0, CHART_COLOR_ASK, C'239,83,80');            // Ask line
+   ChartSetInteger(0, CHART_COLOR_BID, C'38,166,154');           // Bid line
+   ChartRedraw(0);
 
    return INIT_SUCCEEDED;
 }
@@ -307,18 +328,19 @@ void OnTick()
       return;
    }
 
-   // DYNAMIC MICRO-ACCOUNT RISK BUDGETING: Cap single-order SL to max $3.00 (6% of $50 equity)
+   // DYNAMIC MICRO-ACCOUNT RISK BUDGETING: Cap single-order SL to max $3.50 (7% of $50 equity)
    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
-   double maxRiskDollars = (equity <= 100.0) ? 3.00 : (equity * 0.02);
+   double maxRiskDollars = (equity <= 100.0) ? 3.50 : (equity * 0.02);
    double tickVal = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
    double tickSz  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    double pointVal = (tickSz > 0) ? (tickVal / tickSz) * point : 1.0;
    double maxSlPoints = (pointVal > 0 && InpBaseLot > 0) ? (maxRiskDollars / (InpBaseLot * pointVal)) : ((point > 0.0) ? (currentAtr * 1.5 / point) : 100.0);
-   // Micro-Account Anti-Spread Noise Guard: Ensure Gold has at least 300 points ($3.00) room, avoiding spread hunting
-   double minSafeSlDist = (point > 0.0) ? (300.0 * point) : 0.30;
-   double targetSlDist  = MathMax(currentAtr * 1.5, minSafeSlDist);
+   // Micro-Account Anti-Spread Noise Guard: Ensure Gold has at least 350 points ($3.50) buffer, preventing noise stop-outs
+   double minSafeSlDist = (point > 0.0) ? (350.0 * point) : 0.35;
+   double targetSlDist  = MathMax(currentAtr * 1.2, minSafeSlDist);
    double slDist        = MathMin(targetSlDist, maxSlPoints * point);
-   double tpDist        = MathMax(currentAtr * 2.2, slDist * 1.5);
+   // Realistic 1.25R TP target (allows TTP to trail and lock in earlier)
+   double tpDist        = slDist * 1.25;
 
    bool orderFilled = false;
 

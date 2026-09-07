@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
-//|                                 QuantumTitan_v10_Singularity.mq5 |
-//|          v10.10 Singularity Institutional Quant Framework        |
+//|                                 QuantumTitan_v11_Singularity.mq5 |
+//|          v11.00 Singularity Institutional Quant Framework        |
 //|      Multi-Agent Autonomous Trading System: Top 1% Standard      |
 //|      Surpassing Benchmarks: Pionex, 3Commas, Cryptohopper        |
 //|                    Chief Engineer: Gemini Quantum                |
 //+------------------------------------------------------------------+
-#property copyright "QuantumTitan Institutional Quant Framework v10.10"
+#property copyright "QuantumTitan Institutional Quant Framework v11.00"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.10"
-#property description "v10.10 Singularity: Trend-Disciplined Regime Matrix, HTF-Anchored Risk Budgeting"
+#property version   "11.00"
+#property description "v11.00 Singularity: Anti-Chop Confluence, Early Profit Lock, HTF Risk Engine"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -25,7 +25,7 @@
 //+------------------------------------------------------------------+
 input group "=== 1. ACCOUNT SECURITY & CAPITAL PRESERVATION ==="
 input bool     InpDemoOnly             = true;       // Lock EA to DEMO Account Only
-input ulong    InpMagicNumber          = 990900;     // Magic Number (v9 Singularity ID)
+input ulong    InpMagicNumber          = 991100;     // Magic Number (v11 Singularity ID)
 input double   InpMaxSpreadPoints      = 45.0;       // Max Allowed Spread (Points)
 input double   InpMaxDailyLossPct      = 8.0;        // Daily Loss Kill-Switch (%)
 input double   InpHardEquityFloor      = 30.0;       // Hard Equity Floor ($) - Stop All Trading

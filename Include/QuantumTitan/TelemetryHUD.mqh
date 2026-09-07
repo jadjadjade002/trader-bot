@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                 TelemetryHUD.mqh |
-//|               QuantumTitan v10.10 Singularity Architecture       |
+//|               QuantumTitan v11.00 Singularity Architecture       |
 //|               Module 5: Real-time Visual Matrix HUD & Alerts     |
 //|               Institutional On-Chart Telemetry & Notifications   |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.10"
+#property version   "11.00"
 
 #define QT_HUD_PREFIX "QT9_HUD_"
 
@@ -147,59 +147,74 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
 {
    if(!m_enabled) return;
 
-   int startX = 20;
-   int startY = 30;
-   int cardW  = 360;
-   int cardH  = 220;
+   int startX = 15;
+   int startY = 88;
+   int cardW  = 315;
+   int cardH  = 265;
 
-   // 1. Draw Master Card Background
-   CreateCard("BG", startX, startY, cardW, cardH, C'20,24,35', C'45,55,75');
+   // 1. Draw Master Card Background (TradingView Slate Dark #131722 with subtle border)
+   CreateCard("BG", startX, startY, cardW, cardH, C'19,23,34', C'40,48,64');
 
    // 2. Header
-   CreateLabel("HDR", startX + 15, startY + 12, "⚡ QUANTUMTITAN v10.10 SINGULARITY", clrCyan, 10, "Trebuchet MS");
-   
-   // Status Pill
-   string statusBadge = isTradingPermitted ? "🟢 ACTIVE [OPERATIONAL]" : "🔴 PAUSED [" + statusReason + "]";
-   color statusColor = isTradingPermitted ? clrLimeGreen : clrCrimson;
-   CreateLabel("STATUS", startX + 15, startY + 34, statusBadge, statusColor, 9, "Consolas");
+   CreateLabel("HDR", startX + 12, startY + 8, "✦ QUANTUM TITAN v11.00 SINGULARITY ✦", clrWhiteSmoke, 9, "Consolas");
+   CreateLabel("SEP1", startX + 12, startY + 22, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
-   // 3. Market Regime
+   // Section 1: Account Security & News
+   string accMode = (AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_DEMO) ? "DEMO (Safe)" : "REAL (Live)";
+   string accStr  = StringFormat("Account Mode   : %s ($%.2f)", accMode, AccountInfoDouble(ACCOUNT_EQUITY));
+   CreateLabel("ACC", startX + 12, startY + 36, accStr, C'175,185,200', 8, "Consolas");
+
+   string newsStr = (newsStatus == "" || newsStatus == "CLEAR") ? "News Calendar  : CLEAR 🟢" : "News Calendar  : " + newsStatus;
+   color newsClr = (newsStatus == "" || newsStatus == "CLEAR") ? clrMediumSpringGreen : clrYellow;
+   CreateLabel("NEWS", startX + 12, startY + 50, newsStr, newsClr, 8, "Consolas");
+
+   long currentSpread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
+   string spreadStr = StringFormat("Spread Check   : %d pts", currentSpread);
+   color spreadClr = (currentSpread <= 35) ? clrMediumSpringGreen : ((currentSpread <= 45) ? clrGold : clrOrangeRed);
+   CreateLabel("SPREAD", startX + 12, startY + 64, spreadStr, spreadClr, 8, "Consolas");
+
+   CreateLabel("SEP2", startX + 12, startY + 77, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
+
+   // Section 2: Quant Engines & Signals
    color regimeClr = clrDeepSkyBlue;
-   if(StringFind(regimeStr, "BULL") >= 0) regimeClr = clrLime;
-   else if(StringFind(regimeStr, "BEAR") >= 0) regimeClr = clrTomato;
+   if(StringFind(regimeStr, "BULL") >= 0) regimeClr = C'38,166,154';
+   else if(StringFind(regimeStr, "BEAR") >= 0) regimeClr = C'239,83,80';
    else if(StringFind(regimeStr, "SHOCK") >= 0) regimeClr = clrMagenta;
    else regimeClr = clrGold;
 
-   CreateLabel("REGIME", startX + 15, startY + 58, "Market Regime: " + regimeStr, regimeClr, 9, "Trebuchet MS");
+   CreateLabel("REGIME", startX + 12, startY + 90, "H1 Trend Bias  : " + regimeStr, regimeClr, 8, "Consolas");
 
-   // 4. Alpha Confluence Scores
-   string scoreStr = StringFormat("Alpha Score: BUY %d/100 | SELL %d/100 (Min 75)", buyScore, sellScore);
-   CreateLabel("SCORE", startX + 15, startY + 80, scoreStr, clrWhiteSmoke, 9, "Consolas");
+   string scoreStr = StringFormat("Alpha Score    : BUY %d/100 | SELL %d/100", buyScore, sellScore);
+   CreateLabel("SCORE", startX + 12, startY + 104, scoreStr, C'200,210,225', 8, "Consolas");
 
-   // 5. Active Basket Exposure
-   string posStr = StringFormat("Open Basket: BUY %d (%.2f L) | SELL %d (%.2f L)",
+   string posStr = StringFormat("Active Basket  : BUY %d (%.2f L) | SELL %d (%.2f L)",
       buyOrders, buyLots, sellOrders, sellLots);
-   CreateLabel("EXPOSURE", startX + 15, startY + 102, posStr, clrSilver, 9, "Consolas");
+   CreateLabel("EXPOSURE", startX + 12, startY + 118, posStr, C'165,175,190', 8, "Consolas");
 
-   // 6. Floating & High-Water Mark PnL
-   color pnlClr = (floatingPnl >= 0) ? clrLimeGreen : clrOrangeRed;
-   string pnlStr = StringFormat("Floating PnL: %s$%.2f | Daily DD: %.1f%% (HWM: $%.0f)",
+   color pnlClr = (floatingPnl >= 0) ? C'38,166,154' : C'239,83,80';
+   string pnlStr = StringFormat("Floating PnL   : %s$%.2f | DD: %.1f%% (HWM: $%.0f)",
       (floatingPnl >= 0 ? "+" : ""), floatingPnl, dailyDDPct, dailyHWM);
-   CreateLabel("PNL", startX + 15, startY + 124, pnlStr, pnlClr, 9, "Consolas");
+   CreateLabel("PNL", startX + 12, startY + 132, pnlStr, pnlClr, 8, "Consolas");
 
-   // 7. Dynamic Cash Reserve Buffer
-   color marginClr = (freeMarginPct >= 60.0) ? clrMediumSpringGreen : clrDarkOrange;
-   string marginStr = StringFormat("Cash Buffer: Free Margin %.1f%% %s",
-      freeMarginPct, (freeMarginPct >= 60.0 ? "[SECURE]" : "[RESERVE LOCK]"));
-   CreateLabel("MARGIN", startX + 15, startY + 146, marginStr, marginClr, 9, "Consolas");
+   color marginClr = (freeMarginPct >= 60.0) ? C'38,166,154' : clrDarkOrange;
+   string marginStr = StringFormat("Cash Buffer    : Free Margin %.1f%% %s",
+      freeMarginPct, (freeMarginPct >= 60.0 ? "[SECURE]" : "[LOCK]"));
+   CreateLabel("MARGIN", startX + 12, startY + 146, marginStr, marginClr, 8, "Consolas");
 
-   // 8. Economic News Shield
-   string newsStr = (newsStatus == "" || newsStatus == "CLEAR") ? "News Shield: CLEAR (No Red News)" : "News Shield: " + newsStatus;
-   color newsClr = (newsStatus == "" || newsStatus == "CLEAR") ? clrLightSkyBlue : clrYellow;
-   CreateLabel("NEWS", startX + 15, startY + 168, newsStr, newsClr, 9, "Trebuchet MS");
+   CreateLabel("SEP3", startX + 12, startY + 159, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
-   // 9. Institutional Signature
-   CreateLabel("FOOTER", startX + 15, startY + 192, "Institutional Quant Multi-Agent Framework v10.10", C'120,135,160', 8, "Trebuchet MS");
+   // Section 3: Status & Execution
+   string statusBadge = isTradingPermitted ? "🟢 HUNTING SETUP 🎯" : "🔴 PAUSED [" + statusReason + "]";
+   color statusColor = isTradingPermitted ? C'38,166,154' : C'239,83,80';
+   CreateLabel("STATUS", startX + 12, startY + 172, "Status         : " + statusBadge, statusColor, 8, "Consolas");
+
+   string activeStr = (buyOrders > 0 || sellOrders > 0) ? "Active Trades  : IN POSITION 🟢" : "Active Trades  : SCANNING MARKET ⚡";
+   CreateLabel("ACTIVE", startX + 12, startY + 186, activeStr, C'175,185,200', 8, "Consolas");
+
+   CreateLabel("SEP4", startX + 12, startY + 200, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
+
+   // Footer
+   CreateLabel("FOOTER", startX + 12, startY + 214, "Institutional Quant Matrix v11.00", C'110,125,145', 8, "Consolas");
 
    ChartRedraw(0);
 }
