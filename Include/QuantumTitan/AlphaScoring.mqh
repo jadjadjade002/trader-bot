@@ -1291,10 +1291,13 @@ ENUM_ALPHA_SIGNAL CAlphaScoringEngine::EvaluateSignals(AlphaScoreTelemetry &tele
    telemetryOut = m_telemetry;
 
    // Final Confluence Threshold:
-   // On M1: Fast scalping triggers on trend OR active micro chop range with relaxed threshold (>= 50-55)
-   // On M5+: Institutional discipline requires strict HTF trend alignment (REGIME_TREND_BULL / REGIME_TREND_BEAR)
-   bool validRegimeBuy  = (m_timeframe == PERIOD_M1) ? (regime == REGIME_TREND_BULL || regime == REGIME_CHOP_RANGE) : (regime == REGIME_TREND_BULL);
-   bool validRegimeSell = (m_timeframe == PERIOD_M1) ? (regime == REGIME_TREND_BEAR || regime == REGIME_CHOP_RANGE) : (regime == REGIME_TREND_BEAR);
+   // On M1: Fast scalping triggers on trend OR micro chop, BUT requires at least 1 SMC structural anchor
+   // (Order Block, FVG, Liquidity Sweep, or RSI Exhaustion) to prevent entering on random noise!
+   bool hasSmcAnchorBuy  = (m_telemetry.obBaseScore > 0 || m_telemetry.fvgScore > 0 || m_telemetry.sweepIdmScore > 0 || m_telemetry.rsiValue <= 35.0);
+   bool hasSmcAnchorSell = (m_telemetry.obBaseScore > 0 || m_telemetry.fvgScore > 0 || m_telemetry.sweepIdmScore > 0 || m_telemetry.rsiValue >= 65.0);
+
+   bool validRegimeBuy  = (m_timeframe == PERIOD_M1) ? ((regime == REGIME_TREND_BULL || regime == REGIME_CHOP_RANGE) && hasSmcAnchorBuy) : (regime == REGIME_TREND_BULL);
+   bool validRegimeSell = (m_timeframe == PERIOD_M1) ? ((regime == REGIME_TREND_BEAR || regime == REGIME_CHOP_RANGE) && hasSmcAnchorSell) : (regime == REGIME_TREND_BEAR);
 
    if(m_telemetry.totalScoreBuy >= m_scoreThreshold && m_telemetry.totalScoreBuy > m_telemetry.totalScoreSell && validRegimeBuy)
    {
