@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                 TelemetryHUD.mqh |
-//|               QuantumTitan v12.00 Singularity Architecture       |
+//|               QuantumTitan v13.00 Singularity Architecture       |
 //|               Module 5: Real-time Visual Matrix HUD & Alerts     |
 //|               Institutional On-Chart Telemetry & Notifications   |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "12.00"
+#property version   "13.00"
 
 #define QT_HUD_PREFIX "QT9_HUD_"
 
@@ -158,7 +158,13 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    // 2. Header
    string tfStr = EnumToString(_Period);
    StringReplace(tfStr, "PERIOD_", "");
-   string hdrStr = StringFormat("✦ QUANTUM TITAN v12.00 [%s] ✦", tfStr);
+   string profileTag = tfStr;
+   if(_Period == PERIOD_M1) profileTag = "M1 SCALPER";
+   else if(_Period == PERIOD_M5) profileTag = "M5 INTRADAY";
+   else if(_Period == PERIOD_M15) profileTag = "M15 SWING";
+   else if(_Period == PERIOD_H1) profileTag = "H1 MACRO";
+
+   string hdrStr = StringFormat("✦ QUANTUM TITAN v13.00 [%s] ✦", profileTag);
    CreateLabel("HDR", startX + 12, startY + 8, hdrStr, clrWhiteSmoke, 9, "Consolas");
    CreateLabel("SEP1", startX + 12, startY + 22, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
@@ -217,7 +223,7 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateLabel("SEP4", startX + 12, startY + 200, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Footer
-   CreateLabel("FOOTER", startX + 12, startY + 214, "Institutional Quant Matrix v12.00", C'110,125,145', 8, "Consolas");
+   CreateLabel("FOOTER", startX + 12, startY + 214, "Institutional Quant Matrix v13.00", C'110,125,145', 8, "Consolas");
 
    ChartRedraw(0);
 }

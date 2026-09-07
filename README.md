@@ -4,16 +4,19 @@
 
 ---
 
-## 1. ข้อมูลเวอร์ชันล่าสุด (Version 12.00 Singularity)
+## 1. ข้อมูลเวอร์ชันล่าสุด (Version 13.00 Singularity)
 
-QuantumTitan v12.00 Singularity รองรับการทำงานพร้อมกันหลายไทม์เฟรม (Multi-Timeframe Matrix) บนกราฟ M1, M5, M15 และ H1 อย่างเป็นอิสระ โดยมีระบบแยก Magic Number และคำนวณกรอบเวลาอ้างอิงระดับสถาบันแบบอัตโนมัติ
+QuantumTitan v13.00 Singularity พัฒนาระบบสถาปัตยกรรม **Auto-Adaptive Timeframe Profile Engine** ช่วยให้บอทตัวเดียวสามารถปรับบุคลิกภาพการเทรด ระยะตัดขาดทุน (SL), จุดทำกำไร (TP), และระยะก้าวของกริด (Grid Step) ให้สอดคล้องกับพฤติกรรมความผันผวนของแต่ละไทม์เฟรม (M1, M5, M15, H1) โดยอัตโนมัติ 100%
 
-### คุณสมบัติหลักในเวอร์ชัน 12.00:
-- Multi-Timeframe Magic Number Isolation: คำนวณ Magic Number แยกตาม Timeframe อัตโนมัติ (M1: 991201, M5: 991205, M15: 991215, H1: 1007585) เพื่อแยกคำสั่งซื้อขาย กริด และการตัดขาดทุนของแต่ละกราฟอย่างเด็ดขาด
-- Adaptive Higher-Timeframe Confluence: ปรับหาเทรนด์ระดับสถาบันอัตโนมัติ สำหรับกราฟ M1, M5, M15 จะอ้างอิงเทรนด์ H1 ส่วนกราฟ H1 จะยกระดับอ้างอิงเทรนด์ H4
-- Portfolio Exposure Protection: ปรับเพดานสัดส่วนขนาดล็อตภาพรวมพอร์ตโฟลิโอ (InpMaxAccountLots = 0.20) เพื่อรองรับการเปิดคำสั่งพร้อมกัน 4 ไทม์เฟรม
-- OnTradeTransaction Deal Match: ปรับปรุงการตรวจสอบ Deal Magic ให้ตรงกับ Instance Magic เพื่อบันทึกประวัติกำไรขาดทุนและการรีเซ็ต Risk Cache ทันที
-- Microstructure Spread Surge Calibration: ปรับเกณฑ์การตรวจจับ Spread Surge ให้สอดคล้องกับพฤติกรรมสเปรดปกติของทองคำ ป้องกันการล็อกการเทรดโดยไม่จำเป็น
+### คุณสมบัติหลักในเวอร์ชัน 13.00:
+- Dual-ATR Dynamic Sizing: แยกการคำนวณ ATR เป็น 2 ชั้น โดย ATR ของไทม์เฟรมปัจจุบันจะใช้กำหนดระยะ SL/TP, Trailing และ Grid Step ขณะที่ ATR ของกรอบเวลาใหญ่ (H1/H4) ใช้ตรวจจับสภาวะวิกฤติตลาด (Volatility Shock)
+- Timeframe Personality Profiles:
+  - M1 Ultra Scalper: ใช้ ATR ของ M1 + Noise Buffer ($3.50) วางเป้าหมายทำกำไร TP ที่ ~$4.00 - $5.50 จบงานไวใน 5-15 นาที เลื่อนดักหน้าทุน (Breakeven) ที่ +0.30R
+  - M5 Fast Intraday: ใช้ ATR ของ M5 + Noise Buffer ($4.50) วางเป้าหมายทำกำไร TP ที่ ~$6.50 - $9.00 ปิดรอบภายใน 30-60 นาที
+  - M15 Intraday Swing: ใช้ ATR ของ M15 + Noise Buffer ($6.50) วางเป้าหมายทำกำไร TP ที่ ~$10.00 - $15.00 สำหรับรอบสวิงระหว่างวัน
+  - H1 Macro Trend: ใช้ ATR ของ H1 วางเป้าหมายทำกำไร TP ที่ ~$20.00 - $30.00 สำหรับการรันเทรนด์ใหญ่ร่วมกับเทรนด์ระดับ H4
+- Timeframe Badge & Magic Isolation: แสดงป้ายชื่อโปรไฟล์บนแดชบอร์ด HUD อัตโนมัติ พร้อมแยก Magic Number แต่ละกราฟอย่างเด็ดขาด (M1: 991301, M5: 991305, M15: 991315, H1: 1007685)
+- Microstructure Spread Surge Calibration: ระบบควบคุมสเปรดตรวจจับความผิดปกติแบบ Real-time โดยไม่ล็อกการเทรดในช่วงสเปรดปกติของทองคำ (30-36 จุด)
 
 ---
 
@@ -67,6 +70,7 @@ QuantumTitan v12.00 Singularity รองรับการทำงานพร
 | **v10.0** | กันยายน 2026 | Adversarial Hardened: ผ่านการทดสอบ Stress Test จำลองวิกฤติตลาด 500 รูปแบบ, เพิ่มการบันทึกสถานะผ่าน GlobalVariables |
 | **v11.0** | กันยายน 2026 | Anti-Chop Confluence, ปรับ Breakeven 0.35R, ปรับปรุงแดชบอร์ด HUD สไตล์ TradingView Dark Slate |
 | **v12.0** | กันยายน 2026 | Multi-Timeframe Matrix: รองรับการรันพร้อมกันบน M1, M5, M15, H1, Adaptive HTF Confluence, ขยายเพดานพอร์ตโฟลิโอ |
+| **v13.0** | กันยายน 2026 | Auto-Adaptive Engine: แยกโปรไฟล์การเทรดตามไทม์เฟรม M1 Scalp, M5 Intraday, M15 Swing, H1 Macro, Dual-ATR Dynamic Sizing |
 
 ---
 
@@ -74,8 +78,8 @@ QuantumTitan v12.00 Singularity รองรับการทำงานพร
 
 ```text
 trader-bot/
-├── QuantumTitan_v12_Singularity.mq5   # ซอร์สโค้ดหลักเวอร์ชัน 12.00
-├── QuantumTitan_v12_Singularity.ex5   # ไฟล์ไบนารีที่ผ่านการคอมไพล์ 0 Errors
+├── QuantumTitan_v13_Singularity.mq5   # ซอร์สโค้ดหลักเวอร์ชัน 13.00 (Auto-Adaptive Profiles)
+├── QuantumTitan_v13_Singularity.ex5   # ไฟล์ไบนารีที่ผ่านการคอมไพล์ 0 Errors
 ├── Include/
 │   └── QuantumTitan/
 │       ├── AlphaScoring.mqh          # โมดูลวิเคราะห์สภาวะตลาดและคะแนนสัญญาณ

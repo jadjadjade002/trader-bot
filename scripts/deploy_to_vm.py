@@ -10,7 +10,7 @@ inc_dir = os.path.join(mt5_dir, 'Include', 'QuantumTitan')
 os.makedirs(adv_dir, exist_ok=True)
 os.makedirs(inc_dir, exist_ok=True)
 
-for name in ['QuantumTitan_v12_Singularity.ex5', 'QuantumTitan_v12_Singularity.mq5']:
+for name in ['QuantumTitan_v13_Singularity.ex5', 'QuantumTitan_v13_Singularity.mq5', 'QuantumTitan_v12_Singularity.ex5', 'QuantumTitan_v12_Singularity.mq5']:
     src = os.path.join('/home/ubuntu', name)
     if os.path.exists(src):
         shutil.copy2(src, os.path.join(exp_dir, name))
