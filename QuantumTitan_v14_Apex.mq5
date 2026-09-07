@@ -125,14 +125,14 @@ TimeframeProfile GetTimeframeProfile(ENUM_TIMEFRAMES tf)
    {
       case PERIOD_M1:
          p.profileName        = "M1 ULTRA SCALPER";
-         p.minNoisePoints     = 180.0; // $1.80 nimble noise buffer for Gold
-         p.atrSlMultiplier    = 1.2;
-         p.tpRatio            = 1.00;  // ~$1.80 - $2.50 quick TP target
-         p.beTriggerR         = 0.25;  // Lock BE early at +$0.80
-         p.trailTriggerR      = 0.60;  // Trail at +$1.80
-         p.gridStepMultiplier = 1.2;   // Tight spacing for M1
-         p.basketTpAtrMult    = 0.6;
-         p.scoreThreshold     = 55;    // Relaxed threshold for rapid scalping
+         p.minNoisePoints     = 320.0; // $3.20 anti-whipsaw noise buffer for Gold
+         p.atrSlMultiplier    = 1.5;   // 1.5x ATR dynamic buffer
+         p.tpRatio            = 1.35;  // 1.35R ($3.80 - $4.50) positive expectancy target
+         p.beTriggerR         = 0.35;  // Lock BE at +$1.20
+         p.trailTriggerR      = 0.70;  // Trail at +$2.50
+         p.gridStepMultiplier = 1.3;
+         p.basketTpAtrMult    = 0.7;
+         p.scoreThreshold     = 60;    // Filter out low-confidence entries
          break;
 
       case PERIOD_M5:
