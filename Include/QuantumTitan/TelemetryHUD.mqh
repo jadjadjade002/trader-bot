@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                 TelemetryHUD.mqh |
-//|               QuantumTitan v11.00 Singularity Architecture       |
+//|               QuantumTitan v12.00 Singularity Architecture       |
 //|               Module 5: Real-time Visual Matrix HUD & Alerts     |
 //|               Institutional On-Chart Telemetry & Notifications   |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "11.00"
+#property version   "12.00"
 
 #define QT_HUD_PREFIX "QT9_HUD_"
 
@@ -156,7 +156,10 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateCard("BG", startX, startY, cardW, cardH, C'19,23,34', C'40,48,64');
 
    // 2. Header
-   CreateLabel("HDR", startX + 12, startY + 8, "✦ QUANTUM TITAN v11.00 SINGULARITY ✦", clrWhiteSmoke, 9, "Consolas");
+   string tfStr = EnumToString(_Period);
+   StringReplace(tfStr, "PERIOD_", "");
+   string hdrStr = StringFormat("✦ QUANTUM TITAN v12.00 [%s] ✦", tfStr);
+   CreateLabel("HDR", startX + 12, startY + 8, hdrStr, clrWhiteSmoke, 9, "Consolas");
    CreateLabel("SEP1", startX + 12, startY + 22, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Section 1: Account Security & News
@@ -214,7 +217,7 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateLabel("SEP4", startX + 12, startY + 200, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Footer
-   CreateLabel("FOOTER", startX + 12, startY + 214, "Institutional Quant Matrix v11.00", C'110,125,145', 8, "Consolas");
+   CreateLabel("FOOTER", startX + 12, startY + 214, "Institutional Quant Matrix v12.00", C'110,125,145', 8, "Consolas");
 
    ChartRedraw(0);
 }

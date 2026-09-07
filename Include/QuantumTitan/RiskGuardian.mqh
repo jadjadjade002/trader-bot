@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                 RiskGuardian.mqh |
-//|               QuantumTitan v10.10 Singularity Architecture       |
+//|               QuantumTitan v12.00 Singularity Architecture       |
 //|               Module 4: Institutional Capital & Risk Guardian    |
 //|               High-Water Mark Drawdown, News Shield, Breakers    |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.10"
+#property version   "12.00"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -46,6 +46,7 @@ private:
    int               m_maxTradesPerDay;     // Daily completed trade cap (Default 12)
    int               m_maxLosingStreak;     // Pause after N consecutive losses (Default 3)
    double            m_maxSpreadPoints;     // Max allowed spread (Default 45.0)
+   double            m_maxAccountLots;      // Max total open lots on account (Default 0.02)
 
    // News Filter Parameters
    bool              m_useNewsFilter;       // Economic calendar filter
@@ -81,7 +82,8 @@ public:
 
    bool              Init(string symbol, ulong magic, double maxDDPct = 8.0, double hardFloor = 30.0,
                           int maxTrades = 12, int maxLosses = 3, double maxSpread = 45.0,
-                          bool useNews = true, int newsBefore = 30, int newsAfter = 30);
+                          bool useNews = true, int newsBefore = 30, int newsAfter = 30,
+                          double maxAccountLots = 0.20);
 
    // Core Assessment
    bool              ValidateExecution(RiskTelemetry &telemetryOut);
@@ -135,7 +137,8 @@ CRiskGuardian::~CRiskGuardian()
 //+------------------------------------------------------------------+
 bool CRiskGuardian::Init(string symbol, ulong magic, double maxDDPct, double hardFloor,
                          int maxTrades, int maxLosses, double maxSpread,
-                         bool useNews, int newsBefore, int newsAfter)
+                         bool useNews, int newsBefore, int newsAfter,
+                         double maxAccountLots)
 {
    m_symbol = (symbol == "") ? _Symbol : symbol;
    m_magic = magic;
@@ -147,6 +150,7 @@ bool CRiskGuardian::Init(string symbol, ulong magic, double maxDDPct, double har
    m_useNewsFilter = useNews;
    m_newsBufferBeforeMins = newsBefore;
    m_newsBufferAfterMins = newsAfter;
+   m_maxAccountLots = maxAccountLots;
 
    m_trade.SetExpertMagicNumber(m_magic);
 
@@ -286,7 +290,7 @@ bool CRiskGuardian::IsInNewsWindow(string &eventName)
    double bid = SymbolInfoDouble(m_symbol, SYMBOL_BID);
    double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
    double currentSpread = (point > 0) ? (ask - bid) / point : 0;
-   if(currentSpread >= (m_maxSpreadPoints * 0.70))
+   if(currentSpread >= m_maxSpreadPoints)
    {
       eventName = StringFormat("PROXY: Spread Surge %.1f pts (Real-Time Microstructure)", currentSpread);
       return true;
@@ -487,6 +491,23 @@ bool CRiskGuardian::ValidateExecution(RiskTelemetry &telemetryOut)
       telemetryOut.canOpenNewCycle  = false;
       telemetryOut.tradingPermitted = false;
       telemetryOut.rejectReason = StringFormat("STREAK PAUSE: %d consecutive losses", streak);
+   }
+
+   // 7. TRIPWIRE: Portfolio Multi-Chart Exposure Cap (Account-Wide Volume Check)
+   double totalOpenLots = 0.0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      if(m_position.SelectByIndex(i))
+      {
+         if(m_position.Symbol() == m_symbol)
+            totalOpenLots += m_position.Volume();
+      }
+   }
+   if(totalOpenLots >= m_maxAccountLots)
+   {
+      telemetryOut.canOpenNewCycle  = false;
+      telemetryOut.tradingPermitted = false;
+      telemetryOut.rejectReason = StringFormat("PORTFOLIO CAP: %.2f lots active (Max: %.2f)", totalOpenLots, m_maxAccountLots);
    }
 
    return telemetryOut.tradingPermitted;
