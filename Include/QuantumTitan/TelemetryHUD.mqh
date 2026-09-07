@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                 TelemetryHUD.mqh |
-//|               QuantumTitan v13.00 Singularity Architecture       |
+//|               QuantumTitan v14.00 Apex Singularity Architecture  |
 //|               Module 5: Real-time Visual Matrix HUD & Alerts     |
 //|               Institutional On-Chart Telemetry & Notifications   |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "13.00"
+#property version   "14.00"
 
 #define QT_HUD_PREFIX "QT9_HUD_"
 
@@ -166,7 +166,7 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    else if(_Period == PERIOD_M15) profileTag = "M15 SWING";
    else if(_Period == PERIOD_H1) profileTag = "H1 MACRO";
 
-   string hdrStr = StringFormat(">> QUANTUM TITAN v13.00 [%s] <<", profileTag);
+   string hdrStr = StringFormat(">> QUANTUM TITAN v14.00 APEX [%s] <<", profileTag);
    CreateLabel("HDR", startX + 12, startY + 8, hdrStr, clrWhiteSmoke, 9, "Consolas");
    CreateLabel("SEP1", startX + 12, startY + 22, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
@@ -233,7 +233,7 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateLabel("SEP4", startX + 12, startY + 213, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Footer
-   CreateLabel("FOOTER", startX + 12, startY + 225, "Institutional Macro Brain v13.00", C'110,125,145', 8, "Consolas");
+   CreateLabel("FOOTER", startX + 12, startY + 225, "Institutional Macro Brain v14.00 APEX", C'110,125,145', 8, "Consolas");
 
    ChartRedraw(0);
 }

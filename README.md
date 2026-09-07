@@ -1,14 +1,14 @@
-# QuantumTitan Singularity — Institutional MT5 Quantitative Trading System
+# QuantumTitan Apex — Institutional MT5 Quantitative Trading System
 
 ระบบเทรดอัตโนมัติ MetaTrader 5 (MQL5) มาตรฐานกองทุน Quantitative ระดับสถาบันสำหรับสินทรัพย์ XAUUSD (Gold) และคู่สกุลเงินหลัก ออกแบบสถาปัตยกรรม Multi-Agent แบบกระจายศูนย์ ผสานการมองภาพรวมตลาดแบบ Discretionary Prop-Trader (Smart Money Concepts, 50% Equilibrium Zone, Liquidity Sweeps, Fair Value Gaps, Daily Bias, Session Killzones), Alpha Confluence Scoring, ATR Geometric Grid, 3Commas Trailing Take Profit และระบบควบคุมความเสี่ยง High-Water Mark Drawdown
 
 ---
 
-## 1. ข้อมูลเวอร์ชันล่าสุด (Version 13.00 Singularity — Institutional Macro Brain)
+## 1. ข้อมูลเวอร์ชันล่าสุด (Version 14.00 Apex — Institutional Macro Brain)
 
-QuantumTitan v13.00 Singularity ได้รับการยกระดับครั้งประวัติศาสตร์ โดยติดตั้ง **Institutional Macro Brain** เพื่อจำลองกระบวนการตัดสินใจและมุมมองภาพรวมตลาดแบบเทรดเดอร์สถาบันมืออาชีพ (Discretionary Prop Trader) ร่วมกับระบบ **Auto-Adaptive Timeframe Profile Engine** บอทจะทำการวิเคราะห์โครงสร้างตลาดแบบ Top-Down และบังคับใช้กฎเหล็กด้าน Valuation อย่างเข้มงวด
+QuantumTitan v14.00 Apex ได้รับการยกระดับครั้งประวัติศาสตร์ โดยติดตั้ง Institutional Macro Brain เพื่อจำลองกระบวนการตัดสินใจและมุมมองภาพรวมตลาดแบบเทรดเดอร์สถาบันมืออาชีพ (Discretionary Prop Trader) ร่วมกับระบบ Auto-Adaptive Timeframe Profile Engine บอทจะทำการวิเคราะห์โครงสร้างตลาดแบบ Top-Down และบังคับใช้กฎเหล็กด้าน Valuation อย่างเข้มงวด
 
-### คุณสมบัติระดับสถาบันที่เพิ่มเข้ามาใน Version 13.00:
+### คุณสมบัติระดับสถาบันที่เพิ่มเข้ามาใน Version 14.00 Apex:
 
 1. Institutional Equilibrium & Valuation Zone (The 50% Rule):
    - แบ่งโครงสร้างราคารอบสวิงหลักออกเป็น 3 โซน: Discount Zone (<48%), Equilibrium Zone (48% - 52%), และ Premium Zone (>52%)
@@ -42,10 +42,10 @@ QuantumTitan v13.00 Singularity ได้รับการยกระดับ
    - เกณฑ์ผ่านการอนุมัติ: 75/100 คะแนนขึ้นไป พร้อมเงื่อนไขสอดคล้องกับ Valuation Zone
 
 7. Dual-ATR Dynamic Sizing & Timeframe Profiles:
-   - M1 Ultra Scalper: ATR M1 + Noise Buffer (.50), TP ~.00 - .50, BE +0.30R, Magic 991301
-   - M5 Fast Intraday: ATR M5 + Noise Buffer (.50), TP ~.50 - .00, BE +0.35R, Magic 991305
-   - M15 Intraday Swing: ATR M15 + Noise Buffer (.50), TP ~.00 - .00, BE +0.35R, Magic 991315
-   - H1 Macro Trend: ATR H1 + Noise Buffer (.00), TP ~.00 - .00, BE +0.35R, Magic 1007685
+   - M1 Ultra Scalper: ATR M1 + Noise Buffer (.50), TP ~.00 - .50, BE +0.30R, Trail +0.70R, Grid Step 1.5 ATR, Magic 991401
+   - M5 Fast Intraday: ATR M5 + Noise Buffer (.50), TP ~.50 - .00, BE +0.35R, Trail +0.75R, Grid Step 1.2 ATR, Magic 991405
+   - M15 Intraday Swing: ATR M15 + Noise Buffer (.50), TP ~.00 - .00, BE +0.35R, Trail +0.75R, Grid Step 1.1 ATR, Magic 991415
+   - H1 Macro Trend: ATR H1 + Noise Buffer (.00), TP ~.00 - .00, BE +0.35R, Trail +0.75R, Grid Step 1.0 ATR, Magic 991460
 
 ---
 
@@ -97,6 +97,7 @@ QuantumTitan v13.00 Singularity ได้รับการยกระดับ
 | v11.0 | กันยายน 2026 | Anti-Chop Confluence, ปรับ Breakeven 0.35R, ปรับปรุงแดชบอร์ด HUD สไตล์ TradingView Dark Slate |
 | v12.0 | กันยายน 2026 | Multi-Timeframe Matrix: รองรับการรันพร้อมกันบน M1, M5, M15, H1, Adaptive HTF Confluence, ขยายเพดานพอร์ตโฟลิโอ |
 | v13.0 | กันยายน 2026 | Institutional Macro Brain: ผสาน SMC 50% Equilibrium Zone, Liquidity Sweeps, FVGs, Daily Bias, Killzones, Auto-Adaptive Profiles |
+| v14.0 | กันยายน 2026 | Apex Release: ติดตั้ง 8-Factor Institutional Confluence Matrix, Nestled OB, Hidden-Base Fibo, Stateful FVG, Multi-TF Isolation (M1/M5/M15/H1) เต็มรูปแบบ |
 
 ---
 
@@ -104,8 +105,8 @@ QuantumTitan v13.00 Singularity ได้รับการยกระดับ
 
 `	ext
 trader-bot/
-├── QuantumTitan_v13_Singularity.mq5   # ซอร์สโค้ดหลักเวอร์ชัน 13.00 (Institutional Macro Brain)
-├── QuantumTitan_v13_Singularity.ex5   # ไฟล์ไบนารีที่ผ่านการคอมไพล์ 0 Errors, 0 Warnings
+├── QuantumTitan_v14_Apex.mq5          # ซอร์สโค้ดหลักเวอร์ชัน 14.00 Apex (Institutional Macro Brain)
+├── QuantumTitan_v14_Apex.ex5          # ไฟล์ไบนารีที่ผ่านการคอมไพล์ 0 Errors, 0 Warnings
 ├── Include/
 │   └── QuantumTitan/
 │       ├── AlphaScoring.mqh          # โมดูล Macro Brain, SMC Valuation และ Confluence Scoring
@@ -132,18 +133,16 @@ trader-bot/
 1. ตรวจสอบว่าได้ติดตั้ง MetaTrader 5 เรียบร้อยแล้ว
 2. รันคำสั่งคอมไพล์ผ่าน PowerShell:
    `powershell
-   powershell -ExecutionPolicy Bypass -File scripts\compile.ps1 QuantumTitan_v13_Singularity
+   powershell -ExecutionPolicy Bypass -File scripts\compile.ps1 QuantumTitan_v14_Apex
    `
 3. ตรวจสอบว่าผลลัพธ์การคอมไพล์แสดง Result: 0 errors, 0 warnings
 
 ### การติดตั้งลงบน MetaTrader 5:
-1. นำไฟล์ QuantumTitan_v13_Singularity.ex5 ไปวางในไดเรกทอรี:
-   MQL5\Experts\ หรือ MQL5\Experts\Advisors\
-2. นำโฟลเดอร์ Include\QuantumTitan ไปวางในไดเรกทอรี:
-   MQL5\Include\
-3. เปิดโปรแกรม MetaTrader 5
+1. นำไฟล์ QuantumTitan_v14_Apex.ex5 ไปวางในไดเรกทอรี:
+   MQL5\Experts\ หรือ MQL5\Experts\Advisors2. นำโฟลเดอร์ Include\QuantumTitan ไปวางในไดเรกทอรี:
+   MQL5\Include3. เปิดโปรแกรม MetaTrader 5
 4. ลาก Expert Advisor ลงบนกราฟที่ต้องการ (แนะนำ XAUUSD บน Timeframe M1, M5, M15 หรือ H1)
-5. ตรวจสอบให้แน่ใจว่าได้เปิดปุ่ม **Algo Trading** (เป็นไอคอนสีเขียว) บนแถบเครื่องมือของ MT5
+5. ตรวจสอบให้แน่ใจว่าได้เปิดปุ่ม Algo Trading (เป็นไอคอนสีเขียว) บนแถบเครื่องมือของ MT5
 
 ---
 

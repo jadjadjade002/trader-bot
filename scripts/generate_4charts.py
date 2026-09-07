@@ -61,13 +61,13 @@ stops_color=255
 windows_total=1
 
 <expert>
-name=QuantumTitan_v13_Singularity
-path=Experts\\QuantumTitan_v13_Singularity.ex5
+name=QuantumTitan_v14_Apex
+path=Experts\\QuantumTitan_v14_Apex.ex5
 expertmode=1
 <inputs>
 === 1. ACCOUNT SECURITY & CAPITAL PRESERVATION ====
 InpDemoOnly=true
-InpMagicNumber=991300
+InpMagicNumber=991400
 InpAutoMagicByPeriod=true
 InpMaxAccountLots=0.20
 InpMaxSpreadPoints=45.0
