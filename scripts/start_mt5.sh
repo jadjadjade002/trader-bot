@@ -9,7 +9,7 @@ sleep 2
 rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 
 # Start Xvfb display
-Xvfb :0 -screen 0 1280x1024x24 &
+Xvfb :0 -screen 0 1920x1080x24 &
 sleep 2
 
 # Start x11vnc

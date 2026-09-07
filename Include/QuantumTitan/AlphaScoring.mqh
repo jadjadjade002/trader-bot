@@ -152,6 +152,9 @@ public:
    ENUM_ALPHA_SIGNAL  EvaluateSignals(AlphaScoreTelemetry &telemetryOut);
    ENUM_MARKET_REGIME DetectRegime();
    
+   // Configuration
+   void               SetScoreThreshold(int threshold) { m_scoreThreshold = threshold; }
+
    // Accessors
    AlphaScoreTelemetry GetTelemetry() const { return m_telemetry; }
    string             GetRegimeString(ENUM_MARKET_REGIME regime);
@@ -258,8 +261,12 @@ void CAlphaScoringEngine::CalculateEquilibriumZone(double &zonePct, ENUM_MACRO_Z
 
    MqlRates htfRates[];
    ArraySetAsSeries(htfRates, true);
-   int copied = CopyRates(m_symbol, m_htfTimeframe, 0, 48, htfRates);
-   if(copied < 20) return;
+   // On M1: evaluate micro-range across recent 40 bars of M1 itself for nimble scalping
+   // On M5+: evaluate macro-range across HTF (H1/H4) for institutional swing discipline
+   ENUM_TIMEFRAMES rangeTf = (m_timeframe == PERIOD_M1) ? PERIOD_M1 : m_htfTimeframe;
+   int barsToScan          = (m_timeframe == PERIOD_M1) ? 40 : 48;
+   int copied = CopyRates(m_symbol, rangeTf, 0, barsToScan, htfRates);
+   if(copied < 15) return;
 
    double macroHigh = htfRates[0].high;
    double macroLow  = htfRates[0].low;
@@ -1283,12 +1290,17 @@ ENUM_ALPHA_SIGNAL CAlphaScoringEngine::EvaluateSignals(AlphaScoreTelemetry &tele
 
    telemetryOut = m_telemetry;
 
-   // Final Confluence Threshold (75/100) + Strict Regime & Valuation Alignment
-   if(m_telemetry.totalScoreBuy >= m_scoreThreshold && m_telemetry.totalScoreBuy > m_telemetry.totalScoreSell && regime == REGIME_TREND_BULL)
+   // Final Confluence Threshold:
+   // On M1: Fast scalping triggers on trend OR active micro chop range with relaxed threshold (>= 50-55)
+   // On M5+: Institutional discipline requires strict HTF trend alignment (REGIME_TREND_BULL / REGIME_TREND_BEAR)
+   bool validRegimeBuy  = (m_timeframe == PERIOD_M1) ? (regime == REGIME_TREND_BULL || regime == REGIME_CHOP_RANGE) : (regime == REGIME_TREND_BULL);
+   bool validRegimeSell = (m_timeframe == PERIOD_M1) ? (regime == REGIME_TREND_BEAR || regime == REGIME_CHOP_RANGE) : (regime == REGIME_TREND_BEAR);
+
+   if(m_telemetry.totalScoreBuy >= m_scoreThreshold && m_telemetry.totalScoreBuy > m_telemetry.totalScoreSell && validRegimeBuy)
    {
       return ALPHA_SIGNAL_BUY;
    }
-   else if(m_telemetry.totalScoreSell >= m_scoreThreshold && m_telemetry.totalScoreSell > m_telemetry.totalScoreBuy && regime == REGIME_TREND_BEAR)
+   else if(m_telemetry.totalScoreSell >= m_scoreThreshold && m_telemetry.totalScoreSell > m_telemetry.totalScoreBuy && validRegimeSell)
    {
       return ALPHA_SIGNAL_SELL;
    }

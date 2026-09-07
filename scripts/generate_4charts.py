@@ -129,18 +129,18 @@ fixed_height=-1
 """
 
 charts = [
-    # M1
+    # M1  — top-left
     {"name": "chart01.chr", "id": 5001001, "period_type": 0, "period_size": 1,
-     "w_left": 0, "w_top": 0, "w_right": 635, "w_bottom": 460},
-    # M5
+     "w_left": 0, "w_top": 0, "w_right": 960, "w_bottom": 540},
+    # M5  — top-right
     {"name": "chart02.chr", "id": 5001005, "period_type": 0, "period_size": 5,
-     "w_left": 635, "w_top": 0, "w_right": 1270, "w_bottom": 460},
-    # M15
+     "w_left": 960, "w_top": 0, "w_right": 1920, "w_bottom": 540},
+    # M15 — bottom-left
     {"name": "chart03.chr", "id": 5001015, "period_type": 0, "period_size": 15,
-     "w_left": 0, "w_top": 460, "w_right": 635, "w_bottom": 920},
-    # H1
+     "w_left": 0, "w_top": 540, "w_right": 960, "w_bottom": 1080},
+    # H1  — bottom-right
     {"name": "chart04.chr", "id": 5001060, "period_type": 1, "period_size": 1,
-     "w_left": 635, "w_top": 460, "w_right": 1270, "w_bottom": 920},
+     "w_left": 960, "w_top": 540, "w_right": 1920, "w_bottom": 1080},
 ]
 
 for c in charts:

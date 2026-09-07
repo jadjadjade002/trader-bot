@@ -34,6 +34,7 @@ struct TimeframeProfile
    double   trailTriggerR;      // Trailing activation in R-multiple (e.g. 0.70R - 0.75R)
    double   gridStepMultiplier; // Grid step ATR multiplier
    double   basketTpAtrMult;    // Basket close ATR multiplier
+   int      scoreThreshold;     // Alpha Confluence trigger threshold (M1: 55, M5+: 75)
 };
 
 //+------------------------------------------------------------------+
@@ -124,13 +125,14 @@ TimeframeProfile GetTimeframeProfile(ENUM_TIMEFRAMES tf)
    {
       case PERIOD_M1:
          p.profileName        = "M1 ULTRA SCALPER";
-         p.minNoisePoints     = 350.0; // $3.50 noise buffer on Gold
-         p.atrSlMultiplier    = 1.5;
-         p.tpRatio            = 1.25;  // ~$4.00 - $5.50 TP (fast exit)
-         p.beTriggerR         = 0.30;  // Lock BE early at +$1.50
-         p.trailTriggerR      = 0.70;  // Trail early at +$3.50
-         p.gridStepMultiplier = 1.5;   // Safe spacing for fast M1
-         p.basketTpAtrMult    = 0.8;
+         p.minNoisePoints     = 180.0; // $1.80 nimble noise buffer for Gold
+         p.atrSlMultiplier    = 1.2;
+         p.tpRatio            = 1.00;  // ~$1.80 - $2.50 quick TP target
+         p.beTriggerR         = 0.25;  // Lock BE early at +$0.80
+         p.trailTriggerR      = 0.60;  // Trail at +$1.80
+         p.gridStepMultiplier = 1.2;   // Tight spacing for M1
+         p.basketTpAtrMult    = 0.6;
+         p.scoreThreshold     = 55;    // Relaxed threshold for rapid scalping
          break;
 
       case PERIOD_M5:
@@ -142,6 +144,7 @@ TimeframeProfile GetTimeframeProfile(ENUM_TIMEFRAMES tf)
          p.trailTriggerR      = 0.75;
          p.gridStepMultiplier = 1.2;
          p.basketTpAtrMult    = 0.8;
+         p.scoreThreshold     = 75;
          break;
 
       case PERIOD_M15:
@@ -153,6 +156,7 @@ TimeframeProfile GetTimeframeProfile(ENUM_TIMEFRAMES tf)
          p.trailTriggerR      = 0.75;
          p.gridStepMultiplier = 1.1;
          p.basketTpAtrMult    = 0.8;
+         p.scoreThreshold     = 75;
          break;
 
       case PERIOD_H1:
@@ -165,6 +169,7 @@ TimeframeProfile GetTimeframeProfile(ENUM_TIMEFRAMES tf)
          p.trailTriggerR      = 0.75;
          p.gridStepMultiplier = 1.0;
          p.basketTpAtrMult    = 0.8;
+         p.scoreThreshold     = 75;
          break;
    }
    return p;
@@ -227,6 +232,7 @@ int OnInit()
       Print("❌ Failed to initialize Module 1: Alpha Scoring Engine");
       return INIT_FAILED;
    }
+   g_alphaEngine.SetScoreThreshold(g_profile.scoreThreshold);
 
    // 6. Initialize Module 2: Trailing & Reversal Safety Engine (Configured to Timeframe Profile)
    if(!g_trailingEngine.Init(_Symbol, g_actualMagic, g_profile.beTriggerR, g_profile.trailTriggerR, InpTrailingAtrMult))
