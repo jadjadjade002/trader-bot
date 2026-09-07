@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                 TelemetryHUD.mqh |
-//|               QuantumTitan v9+++ Singularity Architecture         |
+//|               QuantumTitan v10 Singularity Architecture          |
 //|               Module 5: Real-time Visual Matrix HUD & Alerts     |
 //|               Institutional On-Chart Telemetry & Notifications   |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "9.00"
+#property version   "10.00"
 
 #define QT_HUD_PREFIX "QT9_HUD_"
 
@@ -156,7 +156,7 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateCard("BG", startX, startY, cardW, cardH, C'20,24,35', C'45,55,75');
 
    // 2. Header
-   CreateLabel("HDR", startX + 15, startY + 12, "⚡ QUANTUMTITAN v9+++ SINGULARITY", clrCyan, 10, "Trebuchet MS");
+   CreateLabel("HDR", startX + 15, startY + 12, "⚡ QUANTUMTITAN v10 SINGULARITY", clrCyan, 10, "Trebuchet MS");
    
    // Status Pill
    string statusBadge = isTradingPermitted ? "🟢 ACTIVE [OPERATIONAL]" : "🔴 PAUSED [" + statusReason + "]";

@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                AlphaScoring.mqh  |
-//|               QuantumTitan v9+++ Singularity Architecture         |
+//|               QuantumTitan v10 Singularity Architecture          |
 //|               Module 1: Market Regime & Confluence Scoring       |
 //|               Beating Benchmark: Cryptohopper Strategy Designer  |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "9.00"
+#property version   "10.00"
 
 //--- Market Regime Enumeration
 enum ENUM_MARKET_REGIME
@@ -181,6 +181,19 @@ bool CAlphaScoringEngine::Init(string symbol, ENUM_TIMEFRAMES tf, ENUM_TIMEFRAME
 ENUM_MARKET_REGIME CAlphaScoringEngine::DetectRegime()
 {
    if(m_handleADX == INVALID_HANDLE || m_handleATR == INVALID_HANDLE) return REGIME_UNKNOWN;
+
+   // Terminal History Synchronization & Data Freshness Guard (Anti-Stale History Trap)
+   if(!SeriesInfoInteger(m_symbol, m_timeframe, SERIES_SYNCHRONIZED) ||
+      !SeriesInfoInteger(m_symbol, m_htfTimeframe, SERIES_SYNCHRONIZED))
+   {
+      return REGIME_UNKNOWN; // Stale cache: terminal downloading fresh bars in background
+   }
+
+   datetime bar0 = iTime(m_symbol, m_timeframe, 0);
+   if(bar0 <= 0 || (TimeCurrent() - bar0) > (PeriodSeconds(m_timeframe) * 2))
+   {
+      return REGIME_UNKNOWN; // Price feed delayed or disconnected
+   }
 
    double adxBuf[1];
    if(CopyBuffer(m_handleADX, 0, 1, 1, adxBuf) <= 0) return REGIME_UNKNOWN;
@@ -363,6 +376,13 @@ ENUM_ALPHA_SIGNAL CAlphaScoringEngine::EvaluateSignals(AlphaScoreTelemetry &tele
    m_telemetry.rsiScore = 0;
 
    ENUM_MARKET_REGIME regime = DetectRegime();
+
+   // CRITICAL GATE 0: Reject stale history, unsynchronized buffers, or uninitialized state
+   if(regime == REGIME_UNKNOWN)
+   {
+      telemetryOut = m_telemetry;
+      return ALPHA_SIGNAL_NONE;
+   }
 
    // CRITICAL GATE 1: Circuit breaker on Volatility Shock
    if(regime == REGIME_VOLATILITY_SHOCK)

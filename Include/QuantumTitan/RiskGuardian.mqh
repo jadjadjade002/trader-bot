@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                 RiskGuardian.mqh |
-//|               QuantumTitan v9+++ Singularity Architecture         |
+//|               QuantumTitan v10 Singularity Architecture          |
 //|               Module 4: Institutional Capital & Risk Guardian    |
 //|               High-Water Mark Drawdown, News Shield, Breakers    |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "9.00"
+#property version   "10.00"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -61,6 +61,14 @@ private:
    datetime          m_lastNewsCheckTime;
    bool              m_cachedNewsResult;
    string            m_cachedNewsEvent;
+   string            m_gvHwm;
+   string            m_gvDay;
+   string            m_gvCB;
+
+   // Cached Daily Stats (Eliminates O(N) HistorySelect tick churn)
+   datetime          m_lastStatsCheckTime;
+   int               m_cachedTradeCount;
+   int               m_cachedConsecutiveLosses;
 
    // Internal Helpers
    void              CheckNewDay();
@@ -79,6 +87,7 @@ public:
    bool              ValidateExecution(RiskTelemetry &telemetryOut);
    bool              CheckEmergencyFloor();
    void              CloseAllPositions(string reason = "Emergency Shutdown");
+   void              InvalidateStatsCache() { m_lastStatsCheckTime = 0; }
 
    // Getters
    RiskTelemetry     GetTelemetry();
@@ -107,7 +116,10 @@ CRiskGuardian::CRiskGuardian()
      m_circuitBreakerTripped(false),
      m_lastNewsCheckTime(0),
      m_cachedNewsResult(false),
-     m_cachedNewsEvent("")
+     m_cachedNewsEvent(""),
+     m_lastStatsCheckTime(0),
+     m_cachedTradeCount(0),
+     m_cachedConsecutiveLosses(0)
 {
 }
 
@@ -147,28 +159,31 @@ bool CRiskGuardian::Init(string symbol, ulong magic, double maxDDPct, double har
    else
       m_trade.SetTypeFilling(ORDER_FILLING_RETURN);
 
-   // Initialize Daily Equity & HWM with GlobalVariable Persistence
+   // Initialize Daily Equity & HWM with Cross-Asset Isolated GlobalVariables
    m_currentDay = iTime(m_symbol, PERIOD_D1, 0);
    m_startingDailyEquity = AccountInfoDouble(ACCOUNT_EQUITY);
 
-   string gvHwm = StringFormat("QT_%I64u_HWM", m_magic);
-   string gvDay = StringFormat("QT_%I64u_DAY", m_magic);
-   string gvCB  = StringFormat("QT_%I64u_CB", m_magic);
+   string safeSymbol = m_symbol;
+   StringReplace(safeSymbol, "/", "_");
+   StringReplace(safeSymbol, ".", "_");
+   m_gvHwm = StringFormat("QT_%I64u_%s_HWM", m_magic, safeSymbol);
+   m_gvDay = StringFormat("QT_%I64u_%s_DAY", m_magic, safeSymbol);
+   m_gvCB  = StringFormat("QT_%I64u_%s_CB", m_magic, safeSymbol);
 
-   if(GlobalVariableCheck(gvDay) && (datetime)GlobalVariableGet(gvDay) == m_currentDay)
+   if(GlobalVariableCheck(m_gvDay) && (datetime)GlobalVariableGet(m_gvDay) == m_currentDay)
    {
-      m_dailyHighWaterMark = GlobalVariableGet(gvHwm);
-      m_circuitBreakerTripped = (GlobalVariableGet(gvCB) > 0.5);
-      PrintFormat("[RiskGuardian] RESTORED PERSISTENT STATE: HWM=$%.2f, CircuitBreaker=%s",
-         m_dailyHighWaterMark, m_circuitBreakerTripped ? "TRIPPED" : "OFF");
+      m_dailyHighWaterMark = GlobalVariableGet(m_gvHwm);
+      m_circuitBreakerTripped = (GlobalVariableGet(m_gvCB) > 0.5);
+      PrintFormat("[RiskGuardian] RESTORED PERSISTENT STATE (%s): HWM=$%.2f, CircuitBreaker=%s",
+         m_symbol, m_dailyHighWaterMark, m_circuitBreakerTripped ? "TRIPPED" : "OFF");
    }
    else
    {
       m_dailyHighWaterMark = m_startingDailyEquity;
       m_circuitBreakerTripped = false;
-      GlobalVariableSet(gvDay, (double)m_currentDay);
-      GlobalVariableSet(gvHwm, m_dailyHighWaterMark);
-      GlobalVariableSet(gvCB, 0.0);
+      GlobalVariableSet(m_gvDay, (double)m_currentDay);
+      GlobalVariableSet(m_gvHwm, m_dailyHighWaterMark);
+      GlobalVariableSet(m_gvCB, 0.0);
    }
 
    PrintFormat("[RiskGuardian] Initialized for %s (DailyMaxDD: %.1f%%, HardFloor: $%.2f, MaxLossStreak: %d)",
@@ -182,9 +197,6 @@ bool CRiskGuardian::Init(string symbol, ulong magic, double maxDDPct, double har
 void CRiskGuardian::CheckNewDay()
 {
    datetime today = iTime(m_symbol, PERIOD_D1, 0);
-   string gvHwm = StringFormat("QT_%I64u_HWM", m_magic);
-   string gvDay = StringFormat("QT_%I64u_DAY", m_magic);
-   string gvCB  = StringFormat("QT_%I64u_CB", m_magic);
 
    if(today != m_currentDay && today > 0)
    {
@@ -192,10 +204,10 @@ void CRiskGuardian::CheckNewDay()
       m_startingDailyEquity = AccountInfoDouble(ACCOUNT_EQUITY);
       m_dailyHighWaterMark = m_startingDailyEquity;
       m_circuitBreakerTripped = false;
-      GlobalVariableSet(gvDay, (double)m_currentDay);
-      GlobalVariableSet(gvHwm, m_dailyHighWaterMark);
-      GlobalVariableSet(gvCB, 0.0);
-      PrintFormat("[RiskGuardian] NEW TRADING DAY DETECTED. Reset HWM: $%.2f", m_dailyHighWaterMark);
+      GlobalVariableSet(m_gvDay, (double)m_currentDay);
+      GlobalVariableSet(m_gvHwm, m_dailyHighWaterMark);
+      GlobalVariableSet(m_gvCB, 0.0);
+      PrintFormat("[RiskGuardian] NEW TRADING DAY DETECTED (%s). Reset HWM: $%.2f", m_symbol, m_dailyHighWaterMark);
    }
 
    // Continuously track peak equity and persist
@@ -203,7 +215,7 @@ void CRiskGuardian::CheckNewDay()
    if(currentEquity > m_dailyHighWaterMark)
    {
       m_dailyHighWaterMark = currentEquity;
-      GlobalVariableSet(gvHwm, m_dailyHighWaterMark);
+      GlobalVariableSet(m_gvHwm, m_dailyHighWaterMark);
    }
 }
 
@@ -212,11 +224,24 @@ void CRiskGuardian::CheckNewDay()
 //+------------------------------------------------------------------+
 int CRiskGuardian::CalculateTodayStats(int &consecutiveLosses)
 {
+   datetime now = TimeCurrent();
+   // Cache stats for 5 seconds to eliminate O(N) HistorySelect database churn on every tick
+   if(now - m_lastStatsCheckTime < 5 && m_lastStatsCheckTime > 0)
+   {
+      consecutiveLosses = m_cachedConsecutiveLosses;
+      return m_cachedTradeCount;
+   }
+
+   m_lastStatsCheckTime = now;
    consecutiveLosses = 0;
    int tradeCount = 0;
 
    datetime startOfDay = iTime(m_symbol, PERIOD_D1, 0);
-   if(!HistorySelect(startOfDay, TimeCurrent())) return 0;
+   if(!HistorySelect(startOfDay, now))
+   {
+      consecutiveLosses = m_cachedConsecutiveLosses;
+      return m_cachedTradeCount;
+   }
 
    int totalDeals = HistoryDealsTotal();
    int streak = 0;
@@ -234,11 +259,17 @@ int CRiskGuardian::CalculateTodayStats(int &consecutiveLosses)
       {
          tradeCount++;
          double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
-         if(profit < -0.0001) streak++;
-         else if(profit > 0.0001) streak = 0; // Win resets streak
+         double swap   = HistoryDealGetDouble(ticket, DEAL_SWAP);
+         double comm   = HistoryDealGetDouble(ticket, DEAL_COMMISSION);
+         double fee    = HistoryDealGetDouble(ticket, DEAL_FEE);
+         double netPnl = profit + swap + comm + fee;
+         if(netPnl < -0.0001) streak++;
+         else if(netPnl > 0.0001) streak = 0; // Net win resets streak
       }
    }
 
+   m_cachedTradeCount = tradeCount;
+   m_cachedConsecutiveLosses = streak;
    consecutiveLosses = streak;
    return tradeCount;
 }
@@ -354,13 +385,59 @@ bool CRiskGuardian::ValidateExecution(RiskTelemetry &telemetryOut)
    if(ddPct >= m_maxDailyLossPct || m_circuitBreakerTripped)
    {
       m_circuitBreakerTripped = true;
-      string gvCB = StringFormat("QT_%I64u_CB", m_magic);
-      GlobalVariableSet(gvCB, 1.0);
+      GlobalVariableSet(m_gvCB, 1.0);
       telemetryOut.circuitBreakerTripped = true;
       telemetryOut.canOpenNewCycle       = false; // Blocks Module 1 initial entries
       telemetryOut.canManageGrid         = true;  // Allows Module 3 active basket rebalance!
       telemetryOut.tradingPermitted      = false;
       telemetryOut.rejectReason = StringFormat("CIRCUIT BREAKER: Daily DD %.2f%% reached (New entries locked, grid active)", ddPct);
+   }
+
+   // 3. TRIPWIRE: Midnight Swap Rollover Blackout (23:55 to 00:05 Broker Server Time)
+   datetime srvTime = TimeTradeServer();
+   MqlDateTime srvDt;
+   TimeToStruct(srvTime, srvDt);
+
+   bool isMidnightRollover = (srvDt.hour == 23 && srvDt.min >= 55) || (srvDt.hour == 0 && srvDt.min < 5);
+   if(isMidnightRollover)
+   {
+      telemetryOut.canOpenNewCycle  = false;
+      telemetryOut.canManageGrid    = false;
+      telemetryOut.tradingPermitted = false;
+      telemetryOut.rejectReason = StringFormat("ROLLOVER BLACKOUT: Midnight swap transition (%02d:%02d)", srvDt.hour, srvDt.min);
+      return false;
+   }
+
+   // 4. TRIPWIRE: Friday Afternoon Leverage Reduction & Weekend Margin Shock Guard
+   double marginLevel = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
+   double freeMargin  = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+
+   // Institutional brokers reduce leverage (e.g. 1:500 -> 1:100) on Friday afternoon (5x margin jump)
+   if(srvDt.day_of_week == 5 && srvDt.hour >= 18)
+   {
+      telemetryOut.canOpenNewCycle = false;
+      telemetryOut.canManageGrid   = false; // Freeze grid expansion before weekend close
+
+      if(marginLevel > 0.0 && marginLevel < 350.0)
+      {
+         telemetryOut.tradingPermitted = false;
+         telemetryOut.rejectReason = StringFormat("FRIDAY LEVERAGE GUARD: Margin Level %.1f%% below 350%% safety buffer. Preemptive liquidation.", marginLevel);
+         PrintFormat("[RiskGuardian] %s", telemetryOut.rejectReason);
+         CloseAllPositions("Friday Leverage Reduction Preemptive Cut");
+         return false;
+      }
+   }
+
+   // 5. TRIPWIRE: Dynamic Margin Level Protection (Continuous Across All Sessions)
+   if(marginLevel > 0.0 && marginLevel < 180.0)
+   {
+      telemetryOut.canOpenNewCycle  = false;
+      telemetryOut.canManageGrid    = false;
+      telemetryOut.tradingPermitted = false;
+      telemetryOut.rejectReason = StringFormat("MARGIN DEFICIT: Margin level %.1f%% below 180%% safety buffer", marginLevel);
+      PrintFormat("[RiskGuardian] %s - Executing defensive liquidation", telemetryOut.rejectReason);
+      CloseAllPositions("Emergency Margin Preservation");
+      return false;
    }
 
    // 3. TRIPWIRE: Economic Calendar News Lockout

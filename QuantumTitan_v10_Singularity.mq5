@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                  QuantumTitan_v9_Singularity.mq5 |
+//|                                 QuantumTitan_v10_Singularity.mq5 |
 //|           v10.00 Singularity Institutional Quant Framework       |
 //|      Multi-Agent Autonomous Trading System: Top 1% Standard      |
 //|      Surpassing Benchmarks: Pionex, 3Commas, Cryptohopper        |
