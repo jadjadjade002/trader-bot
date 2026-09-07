@@ -1,11 +1,9 @@
-﻿import os
+import os
 
+base_dir = os.path.join(os.path.dirname(__file__), "..")
 files = [
-    r"C:\Users\USER\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\Advisors\QuantumSniper_v7_Apex.mq5",
-    r"C:\Users\USER\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\Advisors\QuantumSniper_v6_Institutional.mq5",
-    r"C:\Users\USER\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\Advisors\QuantumSniper_EA.mq5",
-    r"D:\project\trader-bot\QuantumSniper_EA.mq5",
-    r"D:\project\trader-bot\versions\QuantumSniper_v7_Apex.mq5"
+    os.path.join(base_dir, "QuantumSniper_EA.mq5"),
+    os.path.join(base_dir, "versions", "QuantumSniper_v7_Apex.mq5")
 ]
 
 target_text = '   if(InpUseHTFFilter && htfBias == 0)\n   {\n      g_lastSignalReason = "🚫 Choppy H1 Market - Standing By";\n      return;\n   }'

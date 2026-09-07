@@ -7,9 +7,8 @@
 ## ไฟล์ที่สร้าง
 
 | ไฟล์ | สถานะ |
-|------|--------|
-| [QuantumSniper_v5_Fortified.mq5](file:///C:/Users/USER/AppData/Roaming/MetaQuotes/Terminal/D0E8209F77C8CF37AD8BF550E51FF075/MQL5/Experts/Advisors/QuantumSniper_v5_Fortified.mq5) | ✅ Compiled (0 errors, 0 warnings) |
-| [QuantumSniper_v5_Fortified.ex5](file:///C:/Users/USER/AppData/Roaming/MetaQuotes/Terminal/D0E8209F77C8CF37AD8BF550E51FF075/MQL5/Experts/Advisors/QuantumSniper_v5_Fortified.ex5) | ✅ Ready to deploy |
+| `QuantumSniper_v5_Fortified.mq5` | Compiled (0 errors, 0 warnings) |
+| `QuantumSniper_v5_Fortified.ex5` | Ready to deploy |
 
 ## รายการแก้ไข 14 จุด
 

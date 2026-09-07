@@ -365,9 +365,10 @@ void OnTick()
    // 5. STEP 3: Module 3 Dynamic Basket Rebalance & Take Profit (Uses Timeframe ATR)
    g_gridEngine.CheckAndCloseBasket(currentAtr);
 
-   // Fetch Telemetry from Grid and Alpha engines
+   // Fetch Telemetry from Grid and Alpha engines (Real-Time Macro Brain & Signal Evaluation)
    GridBasketTelemetry gridTelem = g_gridEngine.GetTelemetry();
-   AlphaScoreTelemetry alphaTelem = g_alphaEngine.GetTelemetry();
+   AlphaScoreTelemetry alphaTelem;
+   ENUM_ALPHA_SIGNAL liveAlphaSignal = g_alphaEngine.EvaluateSignals(alphaTelem);
 
    // 6. Render On-Chart Visual Matrix HUD (Decoupled & Throttled to max 1 render/sec)
    static ulong s_lastHudRenderMs = 0;
@@ -390,7 +391,10 @@ void OnTick()
          gridTelem.freeMarginPct,
          riskTelem.inNewsLockout ? riskTelem.newsEventName : "CLEAR",
          isTradingPermitted,
-         riskTelem.rejectReason
+         riskTelem.rejectReason,
+         alphaTelem.macroZoneName,
+         alphaTelem.dailyBias,
+         alphaTelem.killzone
       );
    }
 
@@ -428,7 +432,7 @@ void OnTick()
    const int MAX_SIGNAL_RETRIES = 5;
 
    // Evaluate Alpha Confluence Signals (Score >= 75)
-   ENUM_ALPHA_SIGNAL signal = g_alphaEngine.EvaluateSignals(alphaTelem);
+   ENUM_ALPHA_SIGNAL signal = liveAlphaSignal;
 
    // If no trade signal or conditions not met to enter a cycle, lock bar immediately to save CPU
    if(signal == ALPHA_SIGNAL_NONE || (gridTelem.buyOrderCount > 0 || gridTelem.sellOrderCount > 0))

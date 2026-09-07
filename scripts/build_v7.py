@@ -1,6 +1,9 @@
-﻿import os
+import os
 
-source_path = r"C:\Users\USER\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\Advisors\QuantumSniper_v6_Institutional.mq5"
+app_data = os.environ.get("APPDATA", "")
+source_path = os.path.join(os.path.dirname(__file__), "..", "versions", "QuantumSniper_v6_Institutional.mq5")
+if not os.path.exists(source_path):
+    source_path = os.path.join(os.path.dirname(__file__), "..", "QuantumSniper_EA.mq5")
 with open(source_path, "r", encoding="utf-8") as f:
     code = f.read()
 
@@ -130,7 +133,7 @@ code = code.replace(sell_block_old, sell_block_new)
 code = code.replace("⚡ QUANTUM SNIPER v6.0 INSTITUTIONAL ⚡", "⚡ QUANTUM SNIPER v7.0 APEX EDITION ⚡")
 
 # 8. Save as QuantumSniper_v7_Apex.mq5
-target_path = r"C:\Users\USER\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\Advisors\QuantumSniper_v7_Apex.mq5"
+target_path = os.path.join(os.path.dirname(__file__), "..", "versions", "QuantumSniper_v7_Apex.mq5")
 with open(target_path, "w", encoding="utf-8") as f:
     f.write(code)
 

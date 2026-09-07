@@ -38,7 +38,8 @@ public:
                             int buyOrders, double buyLots, int sellOrders, double sellLots,
                             double floatingPnl, double dailyHWM, double dailyDDPct,
                             double freeMarginPct, string newsStatus, bool isTradingPermitted,
-                            string statusReason);
+                            string statusReason,
+                            string macroZone = "EQUILIBRIUM", string dailyBias = "NEUTRAL", string killzone = "ACTIVE");
 
    // Visual Trade Markers
    void           DrawOrderBlock(string name, datetime t1, double p1, datetime t2, double p2, color boxColor);
@@ -140,17 +141,18 @@ void CTelemetryHUD::CreateCard(string name, int x, int y, int width, int height,
 //| Render Real-Time Visual Matrix HUD                               |
 //+------------------------------------------------------------------+
 void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
-                             int buyOrders, double buyLots, int sellOrders, double sellLots,
-                             double floatingPnl, double dailyHWM, double dailyDDPct,
-                             double freeMarginPct, string newsStatus, bool isTradingPermitted,
-                             string statusReason)
+                              int buyOrders, double buyLots, int sellOrders, double sellLots,
+                              double floatingPnl, double dailyHWM, double dailyDDPct,
+                              double freeMarginPct, string newsStatus, bool isTradingPermitted,
+                              string statusReason,
+                              string macroZone, string dailyBias, string killzone)
 {
    if(!m_enabled) return;
 
    int startX = 15;
    int startY = 88;
-   int cardW  = 315;
-   int cardH  = 265;
+   int cardW  = 320;
+   int cardH  = 295;
 
    // 1. Draw Master Card Background (TradingView Slate Dark #131722 with subtle border)
    CreateCard("BG", startX, startY, cardW, cardH, C'19,23,34', C'40,48,64');
@@ -164,66 +166,74 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    else if(_Period == PERIOD_M15) profileTag = "M15 SWING";
    else if(_Period == PERIOD_H1) profileTag = "H1 MACRO";
 
-   string hdrStr = StringFormat("✦ QUANTUM TITAN v13.00 [%s] ✦", profileTag);
+   string hdrStr = StringFormat(">> QUANTUM TITAN v13.00 [%s] <<", profileTag);
    CreateLabel("HDR", startX + 12, startY + 8, hdrStr, clrWhiteSmoke, 9, "Consolas");
    CreateLabel("SEP1", startX + 12, startY + 22, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Section 1: Account Security & News
    string accMode = (AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_DEMO) ? "DEMO (Safe)" : "REAL (Live)";
    string accStr  = StringFormat("Account Mode   : %s ($%.2f)", accMode, AccountInfoDouble(ACCOUNT_EQUITY));
-   CreateLabel("ACC", startX + 12, startY + 36, accStr, C'175,185,200', 8, "Consolas");
+   CreateLabel("ACC", startX + 12, startY + 35, accStr, C'175,185,200', 8, "Consolas");
 
-   string newsStr = (newsStatus == "" || newsStatus == "CLEAR") ? "News Calendar  : CLEAR 🟢" : "News Calendar  : " + newsStatus;
+   string newsStr = (newsStatus == "" || newsStatus == "CLEAR") ? "News Calendar  : CLEAR [NO IMPACT]" : "News Calendar  : " + newsStatus;
    color newsClr = (newsStatus == "" || newsStatus == "CLEAR") ? clrMediumSpringGreen : clrYellow;
-   CreateLabel("NEWS", startX + 12, startY + 50, newsStr, newsClr, 8, "Consolas");
+   CreateLabel("NEWS", startX + 12, startY + 48, newsStr, newsClr, 8, "Consolas");
 
    long currentSpread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
    string spreadStr = StringFormat("Spread Check   : %d pts", currentSpread);
    color spreadClr = (currentSpread <= 35) ? clrMediumSpringGreen : ((currentSpread <= 45) ? clrGold : clrOrangeRed);
-   CreateLabel("SPREAD", startX + 12, startY + 64, spreadStr, spreadClr, 8, "Consolas");
+   CreateLabel("SPREAD", startX + 12, startY + 61, spreadStr, spreadClr, 8, "Consolas");
 
-   CreateLabel("SEP2", startX + 12, startY + 77, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
+   CreateLabel("SEP2", startX + 12, startY + 73, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
-   // Section 2: Quant Engines & Signals
+   // Section 2: Institutional Macro Brain
    color regimeClr = clrDeepSkyBlue;
    if(StringFind(regimeStr, "BULL") >= 0) regimeClr = C'38,166,154';
    else if(StringFind(regimeStr, "BEAR") >= 0) regimeClr = C'239,83,80';
    else if(StringFind(regimeStr, "SHOCK") >= 0) regimeClr = clrMagenta;
    else regimeClr = clrGold;
 
-   CreateLabel("REGIME", startX + 12, startY + 90, "H1 Trend Bias  : " + regimeStr, regimeClr, 8, "Consolas");
+   CreateLabel("REGIME", startX + 12, startY + 85, "HTF Trend Bias : " + regimeStr, regimeClr, 8, "Consolas");
+
+   color zoneClr = clrGold;
+   if(StringFind(macroZone, "DISCOUNT") >= 0) zoneClr = C'38,166,154';
+   else if(StringFind(macroZone, "PREMIUM") >= 0) zoneClr = C'239,83,80';
+   CreateLabel("ZONE", startX + 12, startY + 98, "Macro Zone     : " + macroZone, zoneClr, 8, "Consolas");
+
+   string sessStr = StringFormat("Bias / Session : %s | %s", dailyBias, killzone);
+   CreateLabel("SESSION", startX + 12, startY + 111, sessStr, C'175,185,200', 8, "Consolas");
 
    string scoreStr = StringFormat("Alpha Score    : BUY %d/100 | SELL %d/100", buyScore, sellScore);
-   CreateLabel("SCORE", startX + 12, startY + 104, scoreStr, C'200,210,225', 8, "Consolas");
+   CreateLabel("SCORE", startX + 12, startY + 124, scoreStr, C'200,210,225', 8, "Consolas");
 
    string posStr = StringFormat("Active Basket  : BUY %d (%.2f L) | SELL %d (%.2f L)",
       buyOrders, buyLots, sellOrders, sellLots);
-   CreateLabel("EXPOSURE", startX + 12, startY + 118, posStr, C'165,175,190', 8, "Consolas");
+   CreateLabel("EXPOSURE", startX + 12, startY + 137, posStr, C'165,175,190', 8, "Consolas");
 
    color pnlClr = (floatingPnl >= 0) ? C'38,166,154' : C'239,83,80';
    string pnlStr = StringFormat("Floating PnL   : %s$%.2f | DD: %.1f%% (HWM: $%.0f)",
       (floatingPnl >= 0 ? "+" : ""), floatingPnl, dailyDDPct, dailyHWM);
-   CreateLabel("PNL", startX + 12, startY + 132, pnlStr, pnlClr, 8, "Consolas");
+   CreateLabel("PNL", startX + 12, startY + 150, pnlStr, pnlClr, 8, "Consolas");
 
    color marginClr = (freeMarginPct >= 60.0) ? C'38,166,154' : clrDarkOrange;
    string marginStr = StringFormat("Cash Buffer    : Free Margin %.1f%% %s",
       freeMarginPct, (freeMarginPct >= 60.0 ? "[SECURE]" : "[LOCK]"));
-   CreateLabel("MARGIN", startX + 12, startY + 146, marginStr, marginClr, 8, "Consolas");
+   CreateLabel("MARGIN", startX + 12, startY + 163, marginStr, marginClr, 8, "Consolas");
 
-   CreateLabel("SEP3", startX + 12, startY + 159, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
+   CreateLabel("SEP3", startX + 12, startY + 175, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Section 3: Status & Execution
-   string statusBadge = isTradingPermitted ? "🟢 HUNTING SETUP 🎯" : "🔴 PAUSED [" + statusReason + "]";
+   string statusBadge = isTradingPermitted ? "ACTIVE [HUNTING SETUP]" : "PAUSED [" + statusReason + "]";
    color statusColor = isTradingPermitted ? C'38,166,154' : C'239,83,80';
-   CreateLabel("STATUS", startX + 12, startY + 172, "Status         : " + statusBadge, statusColor, 8, "Consolas");
+   CreateLabel("STATUS", startX + 12, startY + 188, "Status         : " + statusBadge, statusColor, 8, "Consolas");
 
-   string activeStr = (buyOrders > 0 || sellOrders > 0) ? "Active Trades  : IN POSITION 🟢" : "Active Trades  : SCANNING MARKET ⚡";
-   CreateLabel("ACTIVE", startX + 12, startY + 186, activeStr, C'175,185,200', 8, "Consolas");
+   string activeStr = (buyOrders > 0 || sellOrders > 0) ? "Active Trades  : [IN POSITION]" : "Active Trades  : [SCANNING MARKET]";
+   CreateLabel("ACTIVE", startX + 12, startY + 201, activeStr, C'175,185,200', 8, "Consolas");
 
-   CreateLabel("SEP4", startX + 12, startY + 200, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
+   CreateLabel("SEP4", startX + 12, startY + 213, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Footer
-   CreateLabel("FOOTER", startX + 12, startY + 214, "Institutional Quant Matrix v13.00", C'110,125,145', 8, "Consolas");
+   CreateLabel("FOOTER", startX + 12, startY + 225, "Institutional Macro Brain v13.00", C'110,125,145', 8, "Consolas");
 
    ChartRedraw(0);
 }

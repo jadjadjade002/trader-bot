@@ -1,12 +1,13 @@
 //+------------------------------------------------------------------+
 //|                                                AlphaScoring.mqh  |
-//|               QuantumTitan v10.10 Singularity Architecture       |
-//|               Module 1: Market Regime & Confluence Scoring       |
+//|               QuantumTitan v13.00 Singularity Architecture       |
+//|               Module 1: Institutional Macro Brain & Confluence   |
+//|               Top-Down Narrative, Premium/Discount, FVG, Sweeps  |
 //|               Beating Benchmark: Cryptohopper Strategy Designer  |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.10"
+#property version   "13.00"
 
 //--- Market Regime Enumeration
 enum ENUM_MARKET_REGIME
@@ -15,7 +16,7 @@ enum ENUM_MARKET_REGIME
    REGIME_TREND_BULL       = 1, // Strong Uptrend (ADX > 25, EMA20 > EMA50 > EMA200)
    REGIME_TREND_BEAR       = 2, // Strong Downtrend (ADX > 25, EMA20 < EMA50 < EMA200)
    REGIME_CHOP_RANGE       = 3, // Low Volatility / Consolidation (ADX < 20, Squeeze ON)
-   REGIME_VOLATILITY_SHOCK = 4  // Extreme Volatility / News Spike (ATR > 2.5x Normal)
+   REGIME_VOLATILITY_SHOCK = 4  // Extreme Volatility / News Spike (ATR > 2.2x Normal)
 };
 
 //--- Signal Type Enumeration
@@ -26,16 +27,35 @@ enum ENUM_ALPHA_SIGNAL
    ALPHA_SIGNAL_SELL = 2
 };
 
+//--- Institutional Macro Valuation Zone (The 50% Rule)
+enum ENUM_MACRO_ZONE
+{
+   ZONE_EQUILIBRIUM = 0, // Fair Value (48% - 52%)
+   ZONE_DISCOUNT    = 1, // Cheap (<48%): Institutional Buy Zone, SELL Blocked
+   ZONE_PREMIUM     = 2  // Expensive (>52%): Institutional Sell Zone, BUY Blocked
+};
+
 //--- Score Breakdown Struct for Telemetry & HUD
 struct AlphaScoreTelemetry
 {
    ENUM_MARKET_REGIME regime;
+   ENUM_MACRO_ZONE    macroZone;
+   string             macroZoneName;
+   double             zonePct;          // 0.0% (lowest low) to 100.0% (highest high)
+   string             dailyBias;        // "BULLISH", "BEARISH", "NEUTRAL"
+   string             killzone;         // "LONDON KZ", "NEW YORK KZ", "OFF-HOURS"
+   bool               liquiditySweptBuy;
+   bool               liquiditySweptSell;
+   bool               fvgMitigatedBuy;
+   bool               fvgMitigatedSell;
    int                totalScoreBuy;
    int                totalScoreSell;
-   int                trendScore;      // Max 30
-   int                smcScore;        // Max 25
-   int                squeezeScore;    // Max 25
-   int                rsiScore;        // Max 20
+   int                trendScore;       // Max 25
+   int                zoneScore;        // Max 20
+   int                structureScore;   // Max 20 (Liquidity Sweep & SMC)
+   int                fvgSqueezeScore;  // Max 15 (FVG Imbalance & Squeeze)
+   int                rsiScore;         // Max 10
+   int                killzoneScore;    // Max 10
    double             adxValue;
    double             atrValue;
    double             atrBaseline;
@@ -72,7 +92,12 @@ private:
    // Telemetry Cache
    AlphaScoreTelemetry m_telemetry;
 
-   // Internal Calculation Helpers
+   // Internal Institutional Calculation Helpers
+   void               CalculateEquilibriumZone(double &zonePct, ENUM_MACRO_ZONE &zone, string &zoneStr);
+   void               DetectMacroLiquiditySweep(bool &sweptBuy, bool &sweptSell);
+   void               DetectFairValueGap(bool &fvgBuy, bool &fvgSell);
+   void               GetDailyBias(string &biasStr);
+   void               GetSessionKillzone(string &kzStr, int &kzPts);
    bool               CalculateSqueeze(bool &sqzOn, double &sqzMomentum);
    bool               DetectSMCSweep(bool &bullSweep, bool &bearSweep, double &obTop, double &obBottom);
 
@@ -146,7 +171,7 @@ bool CAlphaScoringEngine::Init(string symbol, ENUM_TIMEFRAMES tf, ENUM_TIMEFRAME
    m_timeframe = (tf == PERIOD_CURRENT) ? _Period : tf;
    m_htfTimeframe = htf;
 
-   // 1. HTF Trend EMAs (H1)
+   // 1. HTF Trend EMAs
    m_handleEMA20  = iMA(m_symbol, m_htfTimeframe, 20, 0, MODE_EMA, PRICE_CLOSE);
    m_handleEMA50  = iMA(m_symbol, m_htfTimeframe, 50, 0, MODE_EMA, PRICE_CLOSE);
    m_handleEMA200 = iMA(m_symbol, m_htfTimeframe, 200, 0, MODE_EMA, PRICE_CLOSE);
@@ -171,8 +196,211 @@ bool CAlphaScoringEngine::Init(string symbol, ENUM_TIMEFRAMES tf, ENUM_TIMEFRAME
       return false;
    }
 
-   PrintFormat("[AlphaScoring] Initialized successfully for %s (TF: %d, HTF: %d)", m_symbol, m_timeframe, m_htfTimeframe);
+   AlphaScoreTelemetry initTelem;
+   EvaluateSignals(initTelem);
+
+   PrintFormat("[AlphaScoring] Institutional Macro Brain initialized for %s (TF: %d, HTF: %d)", m_symbol, m_timeframe, m_htfTimeframe);
    return true;
+}
+
+//+------------------------------------------------------------------+
+//| 1. Institutional Equilibrium & Valuation Zone (The 50% Rule)     |
+//+------------------------------------------------------------------+
+void CAlphaScoringEngine::CalculateEquilibriumZone(double &zonePct, ENUM_MACRO_ZONE &zone, string &zoneStr)
+{
+   zonePct = 50.0;
+   zone = ZONE_EQUILIBRIUM;
+   zoneStr = "EQUILIBRIUM (50.0%)";
+
+   MqlRates htfRates[];
+   ArraySetAsSeries(htfRates, true);
+   int copied = CopyRates(m_symbol, m_htfTimeframe, 0, 48, htfRates);
+   if(copied < 20) return;
+
+   double macroHigh = htfRates[0].high;
+   double macroLow  = htfRates[0].low;
+   for(int i = 1; i < copied; i++)
+   {
+      if(htfRates[i].high > macroHigh) macroHigh = htfRates[i].high;
+      if(htfRates[i].low  < macroLow)  macroLow  = htfRates[i].low;
+   }
+
+   double currentBid = SymbolInfoDouble(m_symbol, SYMBOL_BID);
+   double range = macroHigh - macroLow;
+   if(range > 0)
+   {
+      zonePct = ((currentBid - macroLow) / range) * 100.0;
+   }
+
+   if(zonePct < 48.0)
+   {
+      zone = ZONE_DISCOUNT;
+      zoneStr = StringFormat("DISCOUNT (%.1f%%) [BUY ONLY]", zonePct);
+   }
+   else if(zonePct > 52.0)
+   {
+      zone = ZONE_PREMIUM;
+      zoneStr = StringFormat("PREMIUM (%.1f%%) [SELL ONLY]", zonePct);
+   }
+   else
+   {
+      zone = ZONE_EQUILIBRIUM;
+      zoneStr = StringFormat("EQUILIBRIUM (%.1f%%) [FAIR]", zonePct);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 2. Institutional Liquidity Sweep Engine (PDH / PDL / Swings)     |
+//+------------------------------------------------------------------+
+void CAlphaScoringEngine::DetectMacroLiquiditySweep(bool &sweptBuy, bool &sweptSell)
+{
+   sweptBuy = false;
+   sweptSell = false;
+
+   // Check Previous Day High / Low (PDH / PDL)
+   MqlRates d1Rates[];
+   ArraySetAsSeries(d1Rates, true);
+   if(CopyRates(m_symbol, PERIOD_D1, 1, 1, d1Rates) > 0)
+   {
+      double pdh = d1Rates[0].high;
+      double pdl = d1Rates[0].low;
+
+      MqlRates curRates[];
+      ArraySetAsSeries(curRates, true);
+      if(CopyRates(m_symbol, m_timeframe, 0, 5, curRates) >= 5)
+      {
+         // Bearish Liquidity Sweep (Turtle Soup over PDH):
+         // Price spiked above PDH but recent completed candle closed back below PDH!
+         if((curRates[0].high > pdh || curRates[1].high > pdh) && curRates[0].close < pdh)
+         {
+            sweptSell = true;
+         }
+
+         // Bullish Liquidity Sweep (Turtle Soup under PDL):
+         // Price spiked below PDL but recent completed candle closed back above PDL!
+         if((curRates[0].low < pdl || curRates[1].low < pdl) && curRates[0].close > pdl)
+         {
+            sweptBuy = true;
+         }
+      }
+   }
+
+   // Local Swing High / Low Sweep (Last 15 bars)
+   MqlRates localRates[];
+   ArraySetAsSeries(localRates, true);
+   if(CopyRates(m_symbol, m_timeframe, 1, 15, localRates) >= 15)
+   {
+      double swingHigh = localRates[2].high;
+      double swingLow  = localRates[2].low;
+      for(int i = 3; i < 15; i++)
+      {
+         if(localRates[i].high > swingHigh) swingHigh = localRates[i].high;
+         if(localRates[i].low  < swingLow)  swingLow  = localRates[i].low;
+      }
+
+      // Bar 1 swept swing high and rejected
+      if(localRates[0].high > swingHigh && localRates[0].close < swingHigh && localRates[0].close < localRates[0].open)
+      {
+         sweptSell = true;
+      }
+      // Bar 1 swept swing low and rejected
+      if(localRates[0].low < swingLow && localRates[0].close > swingLow && localRates[0].close > localRates[0].open)
+      {
+         sweptBuy = true;
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 3. Fair Value Gap (FVG / Imbalance) Detection                     |
+//+------------------------------------------------------------------+
+void CAlphaScoringEngine::DetectFairValueGap(bool &fvgBuy, bool &fvgSell)
+{
+   fvgBuy = false;
+   fvgSell = false;
+
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
+   if(CopyRates(m_symbol, m_timeframe, 0, 5, rates) < 5) return;
+
+   double bid = SymbolInfoDouble(m_symbol, SYMBOL_BID);
+   double ask = SymbolInfoDouble(m_symbol, SYMBOL_ASK);
+
+   // Bullish FVG (Gap up: Bar 3 High is lower than Bar 1 Low)
+   if(rates[3].high < rates[1].low)
+   {
+      double fvgTop    = rates[1].low;
+      double fvgBottom = rates[3].high;
+      // Current price is rebalancing inside or bouncing off the FVG
+      if(bid >= fvgBottom && bid <= fvgTop)
+      {
+         fvgBuy = true;
+      }
+   }
+
+   // Bearish FVG (Gap down: Bar 3 Low is higher than Bar 1 High)
+   if(rates[3].low > rates[1].high)
+   {
+      double fvgTop    = rates[3].low;
+      double fvgBottom = rates[1].high;
+      // Current price is rebalancing inside or bouncing off the FVG
+      if(ask >= fvgBottom && ask <= fvgTop)
+      {
+         fvgSell = true;
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| 4. Top-Down Daily Bias (D1 Macro Context)                        |
+//+------------------------------------------------------------------+
+void CAlphaScoringEngine::GetDailyBias(string &biasStr)
+{
+   biasStr = "NEUTRAL";
+   MqlRates d1[];
+   ArraySetAsSeries(d1, true);
+   if(CopyRates(m_symbol, PERIOD_D1, 0, 2, d1) < 2) return;
+
+   double currentPrice = SymbolInfoDouble(m_symbol, SYMBOL_BID);
+   double dailyOpen = d1[0].open;
+   double prevClose = d1[1].close;
+
+   if(currentPrice > dailyOpen && currentPrice > prevClose)
+      biasStr = "BULLISH EXPANSION";
+   else if(currentPrice < dailyOpen && currentPrice < prevClose)
+      biasStr = "BEARISH EXPANSION";
+   else
+      biasStr = "CONSOLIDATION";
+}
+
+//+------------------------------------------------------------------+
+//| 5. Time & Price Session Killzones                                |
+//+------------------------------------------------------------------+
+void CAlphaScoringEngine::GetSessionKillzone(string &kzStr, int &kzPts)
+{
+   datetime srvTime = TimeTradeServer();
+   MqlDateTime dt;
+   TimeToStruct(srvTime, dt);
+   int hour = dt.hour;
+
+   // London Killzone (approx 07:00 - 11:00 Server Time)
+   if(hour >= 7 && hour < 11)
+   {
+      kzStr = "LONDON KILLZONE";
+      kzPts = 10;
+   }
+   // New York Killzone (approx 12:00 - 17:00 Server Time)
+   else if(hour >= 12 && hour < 17)
+   {
+      kzStr = "NEW YORK KILLZONE";
+      kzPts = 10;
+   }
+   // Asian / Off-Hours
+   else
+   {
+      kzStr = "OFF-HOURS";
+      kzPts = 0;
+   }
 }
 
 //+------------------------------------------------------------------+
@@ -180,19 +408,27 @@ bool CAlphaScoringEngine::Init(string symbol, ENUM_TIMEFRAMES tf, ENUM_TIMEFRAME
 //+------------------------------------------------------------------+
 ENUM_MARKET_REGIME CAlphaScoringEngine::DetectRegime()
 {
-   if(m_handleADX == INVALID_HANDLE || m_handleATR == INVALID_HANDLE) return REGIME_UNKNOWN;
+   if(m_handleADX == INVALID_HANDLE || m_handleATR == INVALID_HANDLE)
+   {
+      m_telemetry.regime = REGIME_UNKNOWN;
+      m_telemetry.regimeName = "CALIBRATING";
+      return REGIME_UNKNOWN;
+   }
 
-   // Terminal History Synchronization & Data Freshness Guard (Anti-Stale History Trap)
    if(!SeriesInfoInteger(m_symbol, m_timeframe, SERIES_SYNCHRONIZED) ||
       !SeriesInfoInteger(m_symbol, m_htfTimeframe, SERIES_SYNCHRONIZED))
    {
-      return REGIME_UNKNOWN; // Stale cache: terminal downloading fresh bars in background
+      m_telemetry.regime = REGIME_UNKNOWN;
+      m_telemetry.regimeName = "SYNCING";
+      return REGIME_UNKNOWN;
    }
 
    datetime bar0 = iTime(m_symbol, m_timeframe, 0);
-   if(bar0 <= 0 || (TimeCurrent() - bar0) > (PeriodSeconds(m_timeframe) * 2))
+   if(bar0 <= 0)
    {
-      return REGIME_UNKNOWN; // Price feed delayed or disconnected
+      m_telemetry.regime = REGIME_UNKNOWN;
+      m_telemetry.regimeName = "AWAITING_BAR";
+      return REGIME_UNKNOWN;
    }
 
    double adxBuf[1];
@@ -202,7 +438,7 @@ ENUM_MARKET_REGIME CAlphaScoringEngine::DetectRegime()
    double atrBuf[];
    ArraySetAsSeries(atrBuf, true);
    if(CopyBuffer(m_handleATR, 0, 1, 10, atrBuf) < 10) return REGIME_UNKNOWN;
-   double currentAtr = atrBuf[0]; // Bar 1 (most recent completed bar)
+   double currentAtr = atrBuf[0];
    double avgAtr = 0;
    for(int i = 0; i < 10; i++) avgAtr += atrBuf[i];
    avgAtr /= 10.0;
@@ -211,7 +447,7 @@ ENUM_MARKET_REGIME CAlphaScoringEngine::DetectRegime()
    m_telemetry.atrValue = currentAtr;
    m_telemetry.atrBaseline = avgAtr;
 
-   // 1. Check for Real-Time Live Candle Volatility Shock (Bar 0 - Zero Lag)
+   // 1. Live Candle Volatility Shock
    MqlRates liveBar[1];
    if(CopyRates(m_symbol, m_timeframe, 0, 1, liveBar) > 0)
    {
@@ -224,7 +460,7 @@ ENUM_MARKET_REGIME CAlphaScoringEngine::DetectRegime()
       }
    }
 
-   // 2. Check for Completed Bar Volatility Shock (Bar 1)
+   // 2. Completed Bar Volatility Shock
    if(avgAtr > 0 && (currentAtr / avgAtr) >= m_shockMultiplier)
    {
       m_telemetry.regime = REGIME_VOLATILITY_SHOCK;
@@ -232,7 +468,7 @@ ENUM_MARKET_REGIME CAlphaScoringEngine::DetectRegime()
       return REGIME_VOLATILITY_SHOCK;
    }
 
-   // 2. Check Trend vs Chop based on ADX & HTF EMAs
+   // 3. Check Trend vs Chop based on ADX & HTF EMAs
    double ema20[1], ema50[1], ema200[1];
    if(CopyBuffer(m_handleEMA20, 0, 1, 1, ema20) > 0 &&
       CopyBuffer(m_handleEMA50, 0, 1, 1, ema50) > 0 &&
@@ -255,7 +491,6 @@ ENUM_MARKET_REGIME CAlphaScoringEngine::DetectRegime()
       }
    }
 
-   // 3. If ADX < Chop level or in transition
    m_telemetry.regime = REGIME_CHOP_RANGE;
    m_telemetry.regimeName = "CHOP_RANGE";
    return REGIME_CHOP_RANGE;
@@ -279,21 +514,11 @@ bool CAlphaScoringEngine::CalculateSqueeze(bool &sqzOn, double &sqzMomentum)
    double atrBuf[1];
    if(CopyBuffer(m_handleATR, 0, 1, 1, atrBuf) <= 0) return false;
 
-   // Keltner Channels (20 SMA +/- 1.5 * ATR)
    double kcUps = bbMid[0] + 1.5 * atrBuf[0];
    double kcLows = bbMid[0] - 1.5 * atrBuf[0];
 
-   // Squeeze ON: Bollinger Bands inside Keltner Channels (Volatility contraction)
-   if(bbUpper[0] < kcUps && bbLower[0] > kcLows)
-   {
-      sqzOn = true;
-   }
-   else
-   {
-      sqzOn = false; // Squeeze Release (Explosion ready)
-   }
+   sqzOn = (bbUpper[0] < kcUps && bbLower[0] > kcLows);
 
-   // Momentum: Close vs average of (Highest High + Lowest Low)/2 + SMA
    MqlRates rates[];
    ArraySetAsSeries(rates, true);
    if(CopyRates(m_symbol, m_timeframe, 1, 20, rates) < 20) return false;
@@ -306,8 +531,7 @@ bool CAlphaScoringEngine::CalculateSqueeze(bool &sqzOn, double &sqzMomentum)
       if(rates[i].low < lowestLow) lowestLow = rates[i].low;
    }
    double donchianMid = (highestHigh + lowestLow) / 2.0;
-   double delta = rates[0].close - ((donchianMid + bbMid[0]) / 2.0);
-   sqzMomentum = delta;
+   sqzMomentum = rates[0].close - ((donchianMid + bbMid[0]) / 2.0);
 
    m_telemetry.squeezeActive = sqzOn;
    return true;
@@ -327,14 +551,12 @@ bool CAlphaScoringEngine::DetectSMCSweep(bool &bullSweep, bool &bearSweep, doubl
    ArraySetAsSeries(rates, true);
    if(CopyRates(m_symbol, m_timeframe, 1, 10, rates) < 10) return false;
 
-   // Bar 1 is the displacement candle
    double barRange = rates[0].high - rates[0].low;
    double barBody = MathAbs(rates[0].close - rates[0].open);
    if(barRange <= 0) return false;
 
    double bodyRatio = barBody / barRange;
 
-   // Check liquidity sweep over previous 5 bars
    double prevHigh = rates[1].high;
    double prevLow  = rates[1].low;
    for(int i = 2; i <= 5; i++)
@@ -343,7 +565,6 @@ bool CAlphaScoringEngine::DetectSMCSweep(bool &bullSweep, bool &bearSweep, doubl
       if(rates[i].low  < prevLow)  prevLow  = rates[i].low;
    }
 
-   // Bullish Sweep: Price dipped below prevLow but closed bullish with strong displacement
    if(rates[0].low < prevLow && rates[0].close > rates[0].open && bodyRatio >= 0.55)
    {
       bullSweep = true;
@@ -351,7 +572,6 @@ bool CAlphaScoringEngine::DetectSMCSweep(bool &bullSweep, bool &bearSweep, doubl
       obTop = rates[0].open;
    }
 
-   // Bearish Sweep: Price spiked above prevHigh but closed bearish with strong displacement
    if(rates[0].high > prevHigh && rates[0].close < rates[0].open && bodyRatio >= 0.55)
    {
       bearSweep = true;
@@ -363,44 +583,54 @@ bool CAlphaScoringEngine::DetectSMCSweep(bool &bullSweep, bool &bearSweep, doubl
 }
 
 //+------------------------------------------------------------------+
-//| Evaluate 100-Point Confluence Scoring System                     |
+//| Evaluate Institutional Macro Brain & Confluence Signals          |
 //+------------------------------------------------------------------+
 ENUM_ALPHA_SIGNAL CAlphaScoringEngine::EvaluateSignals(AlphaScoreTelemetry &telemetryOut)
 {
-   // Reset scores
    m_telemetry.totalScoreBuy = 0;
    m_telemetry.totalScoreSell = 0;
    m_telemetry.trendScore = 0;
-   m_telemetry.smcScore = 0;
-   m_telemetry.squeezeScore = 0;
+   m_telemetry.zoneScore = 0;
+   m_telemetry.structureScore = 0;
+   m_telemetry.fvgSqueezeScore = 0;
    m_telemetry.rsiScore = 0;
+   m_telemetry.killzoneScore = 0;
 
    ENUM_MARKET_REGIME regime = DetectRegime();
 
-   // CRITICAL GATE 0: Reject stale history, unsynchronized buffers, or uninitialized state
-   if(regime == REGIME_UNKNOWN)
-   {
-      telemetryOut = m_telemetry;
-      return ALPHA_SIGNAL_NONE;
-   }
+   // 1. Calculate Institutional Valuation Zone (50% Equilibrium Rule)
+   double zonePct = 50.0;
+   ENUM_MACRO_ZONE macroZone = ZONE_EQUILIBRIUM;
+   string zoneStr = "";
+   CalculateEquilibriumZone(zonePct, macroZone, zoneStr);
+   m_telemetry.macroZone     = macroZone;
+   m_telemetry.macroZoneName = zoneStr;
+   m_telemetry.zonePct       = zonePct;
 
-   // CRITICAL GATE 1: Circuit breaker on Volatility Shock
-   if(regime == REGIME_VOLATILITY_SHOCK)
-   {
-      telemetryOut = m_telemetry;
-      return ALPHA_SIGNAL_NONE; // Absolute pause during black swan / shock
-   }
+   // 2. Detect Liquidity Sweeps (Macro PDH/PDL + Local Swings)
+   bool sweptBuy = false, sweptSell = false;
+   DetectMacroLiquiditySweep(sweptBuy, sweptSell);
+   m_telemetry.liquiditySweptBuy  = sweptBuy;
+   m_telemetry.liquiditySweptSell = sweptSell;
 
-   // CRITICAL GATE 2: Strict Trend-Discipline Gatekeeper
-   // Directional cycle entries in CHOP_RANGE are strictly prohibited.
-   // CHOP_RANGE produces false breakouts where spread consumes 25-35% of SL buffer.
-   if(regime == REGIME_CHOP_RANGE)
-   {
-      telemetryOut = m_telemetry;
-      return ALPHA_SIGNAL_NONE;
-   }
+   // 3. Detect Fair Value Gaps (FVG)
+   bool fvgBuy = false, fvgSell = false;
+   DetectFairValueGap(fvgBuy, fvgSell);
+   m_telemetry.fvgMitigatedBuy  = fvgBuy;
+   m_telemetry.fvgMitigatedSell = fvgSell;
 
-   // Component 1: Higher Timeframe Trend Bias (Max 30 Points)
+   // 4. Daily Bias & Session Killzone
+   string dailyBias = "";
+   GetDailyBias(dailyBias);
+   m_telemetry.dailyBias = dailyBias;
+
+   string kzStr = "";
+   int kzPts = 0;
+   GetSessionKillzone(kzStr, kzPts);
+   m_telemetry.killzone      = kzStr;
+   m_telemetry.killzoneScore = kzPts;
+
+   // Component 1: Higher Timeframe Trend Bias (Max 25 Points)
    double htfEma20[1], htfEma50[1], htfEma200[1];
    if(CopyBuffer(m_handleEMA20, 0, 1, 1, htfEma20) > 0 &&
       CopyBuffer(m_handleEMA50, 0, 1, 1, htfEma50) > 0 &&
@@ -408,99 +638,116 @@ ENUM_ALPHA_SIGNAL CAlphaScoringEngine::EvaluateSignals(AlphaScoreTelemetry &tele
    {
       if(htfEma20[0] > htfEma50[0])
       {
-         int pts = 20;
-         if(htfEma50[0] > htfEma200[0]) pts += 10; // Full bull alignment (30 pts)
+         int pts = 15;
+         if(htfEma50[0] > htfEma200[0]) pts += 10; // 25 pts
          m_telemetry.totalScoreBuy += pts;
          m_telemetry.trendScore = pts;
       }
       else if(htfEma20[0] < htfEma50[0])
       {
-         int pts = 20;
-         if(htfEma50[0] < htfEma200[0]) pts += 10; // Full bear alignment (30 pts)
+         int pts = 15;
+         if(htfEma50[0] < htfEma200[0]) pts += 10; // 25 pts
          m_telemetry.totalScoreSell += pts;
          m_telemetry.trendScore = pts;
       }
    }
 
-   // Component 2: LuxAlgo SMC Order Block Sweep (Max 25 Points)
+   // Component 2: Institutional Valuation Zone (Max 20 Points)
+   // Elite Rule: Reward buying in Discount (<50%) and selling in Premium (>50%)
+   if(macroZone == ZONE_DISCOUNT)
+   {
+      m_telemetry.totalScoreBuy += 20;
+      m_telemetry.zoneScore = 20;
+   }
+   else if(macroZone == ZONE_PREMIUM)
+   {
+      m_telemetry.totalScoreSell += 20;
+      m_telemetry.zoneScore = 20;
+   }
+   else // Equilibrium
+   {
+      m_telemetry.totalScoreBuy += 10;
+      m_telemetry.totalScoreSell += 10;
+      m_telemetry.zoneScore = 10;
+   }
+
+   // Component 3: Market Structure & Liquidity Sweeps (Max 20 Points)
    bool bullSweep = false, bearSweep = false;
    double obTop = 0, obBottom = 0;
-   if(DetectSMCSweep(bullSweep, bearSweep, obTop, obBottom))
+   DetectSMCSweep(bullSweep, bearSweep, obTop, obBottom);
+
+   if(sweptBuy || bullSweep)
    {
-      if(bullSweep)
-      {
-         m_telemetry.totalScoreBuy += 25;
-         m_telemetry.smcScore = 25;
-      }
-      else if(bearSweep)
-      {
-         m_telemetry.totalScoreSell += 25;
-         m_telemetry.smcScore = 25;
-      }
+      int pts = sweptBuy ? 20 : 15;
+      m_telemetry.totalScoreBuy += pts;
+      m_telemetry.structureScore = pts;
+   }
+   if(sweptSell || bearSweep)
+   {
+      int pts = sweptSell ? 20 : 15;
+      m_telemetry.totalScoreSell += pts;
+      if(m_telemetry.structureScore < pts) m_telemetry.structureScore = pts;
    }
 
-   // Component 3: LazyBear Squeeze Momentum Release (Max 25 Points)
+   // Component 4: Fair Value Gap Imbalance & Squeeze Momentum (Max 15 Points)
    bool sqzOn = false;
    double sqzMom = 0.0;
-   if(CalculateSqueeze(sqzOn, sqzMom))
+   CalculateSqueeze(sqzOn, sqzMom);
+
+   if(fvgBuy || (!sqzOn && sqzMom > 0))
    {
-      if(!sqzOn) // Squeeze is released (Momentum explosion)
-      {
-         if(sqzMom > 0)
-         {
-            m_telemetry.totalScoreBuy += 25;
-            m_telemetry.squeezeScore = 25;
-         }
-         else if(sqzMom < 0)
-         {
-            m_telemetry.totalScoreSell += 25;
-            m_telemetry.squeezeScore = 25;
-         }
-      }
-      else
-      {
-         // Inside squeeze - award partial points if momentum is clearly directional
-         if(sqzMom > 0) m_telemetry.totalScoreBuy += 10;
-         else if(sqzMom < 0) m_telemetry.totalScoreSell += 10;
-         m_telemetry.squeezeScore = 10;
-      }
+      int pts = (fvgBuy && !sqzOn) ? 15 : 10;
+      m_telemetry.totalScoreBuy += pts;
+      m_telemetry.fvgSqueezeScore = pts;
+   }
+   if(fvgSell || (!sqzOn && sqzMom < 0))
+   {
+      int pts = (fvgSell && !sqzOn) ? 15 : 10;
+      m_telemetry.totalScoreSell += pts;
+      if(m_telemetry.fvgSqueezeScore < pts) m_telemetry.fvgSqueezeScore = pts;
    }
 
-   // Component 4: Multi-Timeframe RSI Volatility & Exhaustion (Max 20 Points)
+   // Component 5: Multi-Timeframe RSI Volatility & Exhaustion (Max 10 Points)
    double rsiBuf[1];
    if(CopyBuffer(m_handleRSI, 0, 1, 1, rsiBuf) > 0)
    {
       double rsiVal = rsiBuf[0];
       m_telemetry.rsiValue = rsiVal;
 
-      // Buy condition: RSI healthy pull-back (35 - 58), not overbought (>65)
       if(rsiVal >= 35.0 && rsiVal <= 58.0)
-      {
-         m_telemetry.totalScoreBuy += 20;
-         m_telemetry.rsiScore = 20;
-      }
-      else if(rsiVal > 58.0 && rsiVal <= 65.0)
       {
          m_telemetry.totalScoreBuy += 10;
          m_telemetry.rsiScore = 10;
       }
-
-      // Sell condition: RSI healthy rally (42 - 65), not oversold (<35)
       if(rsiVal >= 42.0 && rsiVal <= 65.0)
       {
-         m_telemetry.totalScoreSell += 20;
-         if(m_telemetry.rsiScore < 20) m_telemetry.rsiScore = 20;
-      }
-      else if(rsiVal >= 35.0 && rsiVal < 42.0)
-      {
          m_telemetry.totalScoreSell += 10;
-         if(m_telemetry.rsiScore < 10) m_telemetry.rsiScore = 10;
+         m_telemetry.rsiScore = 10;
       }
+   }
+
+   // Component 6: Session Killzone Confluence (Max 10 Points)
+   m_telemetry.totalScoreBuy  += kzPts;
+   m_telemetry.totalScoreSell += kzPts;
+
+   // =================================================================
+   // CRITICAL PRO-TRADER GATEKEEPERS (THE 50% EQUILIBRIUM RULE)
+   // =================================================================
+   // Elite Rule 1: NEVER BUY IN PREMIUM (Above 50% of Macro Range)!
+   if(macroZone == ZONE_PREMIUM)
+   {
+      m_telemetry.totalScoreBuy = 0; // Strictly zero out BUY score in expensive zone!
+   }
+
+   // Elite Rule 2: NEVER SELL IN DISCOUNT (Below 50% of Macro Range)!
+   if(macroZone == ZONE_DISCOUNT)
+   {
+      m_telemetry.totalScoreSell = 0; // Strictly zero out SELL score in cheap zone!
    }
 
    telemetryOut = m_telemetry;
 
-   // Final Signal Decision based on 75-point Confluence Threshold AND strict Regime Alignment
+   // Final Confluence Threshold (75/100) + Strict Regime & Valuation Alignment
    if(m_telemetry.totalScoreBuy >= m_scoreThreshold && m_telemetry.totalScoreBuy > m_telemetry.totalScoreSell && regime == REGIME_TREND_BULL)
    {
       return ALPHA_SIGNAL_BUY;

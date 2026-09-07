@@ -6,3 +6,15 @@
 *.key
 *.pem
 cloud_deploy/
+
+# Local credentials and confidential files
+*.local.*
+credentials*
+secrets*
+.env*
+*.env
+
+# Local screenshots and runtime captures
+/*.png
+screen_*.png
+compile.log
