@@ -336,28 +336,47 @@ void CAlphaScoringEngine::DetectMacroLiquiditySweep(bool &sweptBuy, bool &sweptS
       }
    }
 
-   // Local Swing High / Low Sweep (Last 15 bars)
+   // Local Swing High / Low Sweep
+   // On M1: Fast micro swing detection over last 10-15 bars with live candle wick check
    MqlRates localRates[];
    ArraySetAsSeries(localRates, true);
-   if(CopyRates(m_symbol, m_timeframe, 1, 15, localRates) >= 15)
+   int scanBars = (m_timeframe == PERIOD_M1) ? 12 : 15;
+   if(CopyRates(m_symbol, m_timeframe, 0, scanBars, localRates) >= scanBars)
    {
       double swingHigh = localRates[2].high;
       double swingLow  = localRates[2].low;
-      for(int i = 3; i < 15; i++)
+      for(int i = 3; i < scanBars; i++)
       {
          if(localRates[i].high > swingHigh) swingHigh = localRates[i].high;
          if(localRates[i].low  < swingLow)  swingLow  = localRates[i].low;
       }
 
-      // Bar 1 swept swing high and rejected
-      if(localRates[0].high > swingHigh && localRates[0].close < swingHigh && localRates[0].close < localRates[0].open)
+      // 1. Completed bar 1 swept swing and rejected
+      if(localRates[1].high > swingHigh && localRates[1].close < swingHigh && localRates[1].close <= localRates[1].open)
       {
          sweptSell = true;
       }
-      // Bar 1 swept swing low and rejected
-      if(localRates[0].low < swingLow && localRates[0].close > swingLow && localRates[0].close > localRates[0].open)
+      if(localRates[1].low < swingLow && localRates[1].close > swingLow && localRates[1].close >= localRates[1].open)
       {
          sweptBuy = true;
+      }
+
+      // 2. Live bar 0 spiked above swing high and currently pulling back with upper wick
+      if(!sweptSell && localRates[0].high > swingHigh && localRates[0].close < swingHigh)
+      {
+         double barRange = localRates[0].high - localRates[0].low;
+         if(barRange > 0 && ((localRates[0].high - localRates[0].close) / barRange) >= 0.40)
+         {
+            sweptSell = true; // Pin-bar / Turtle Soup rejection in progress!
+         }
+      }
+      if(!sweptBuy && localRates[0].low < swingLow && localRates[0].close > swingLow)
+      {
+         double barRange = localRates[0].high - localRates[0].low;
+         if(barRange > 0 && ((localRates[0].close - localRates[0].low) / barRange) >= 0.40)
+         {
+            sweptBuy = true; // Hammer / Turtle Soup rejection in progress!
+         }
       }
    }
 }

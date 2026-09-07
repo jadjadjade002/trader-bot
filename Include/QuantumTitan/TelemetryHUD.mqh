@@ -230,10 +230,29 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    string activeStr = (buyOrders > 0 || sellOrders > 0) ? "Active Trades  : [IN POSITION]" : "Active Trades  : [SCANNING MARKET]";
    CreateLabel("ACTIVE", startX + 12, startY + 201, activeStr, C'175,185,200', 8, "Consolas");
 
-   CreateLabel("SEP4", startX + 12, startY + 213, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
+   // Target / Setup Progress Feedback
+   string targetStr = "";
+   if(buyOrders == 0 && sellOrders == 0)
+   {
+      int targetScore = (_Period == PERIOD_M1) ? 60 : 75;
+      int leadScore   = MathMax(buyScore, sellScore);
+      int needScore   = MathMax(0, targetScore - leadScore);
+      string leadSide = (buyScore >= sellScore) ? "BUY" : "SELL";
+      if(needScore == 0)
+         targetStr = StringFormat("Setup Radar    : READY TO FIRE [%s]", leadSide);
+      else
+         targetStr = StringFormat("Setup Radar    : NEED +%d PTS [%s FVG/SWEEP]", needScore, leadSide);
+   }
+   else
+   {
+      targetStr = "Setup Radar    : MONITORING RUNNER";
+   }
+   CreateLabel("RADAR", startX + 12, startY + 214, targetStr, clrGold, 8, "Consolas");
+
+   CreateLabel("SEP4", startX + 12, startY + 226, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Footer
-   CreateLabel("FOOTER", startX + 12, startY + 225, "Institutional Macro Brain v14.00 APEX", C'110,125,145', 8, "Consolas");
+   CreateLabel("FOOTER", startX + 12, startY + 238, "Institutional Macro Brain v14.00 APEX", C'110,125,145', 8, "Consolas");
 
    ChartRedraw(0);
 }
