@@ -243,10 +243,22 @@ void OnTick()
       riskTelem.rejectReason
    );
 
-   // If risk guardian blocked trading (Circuit breaker, news lockout, floor), skip entries
-   if(!isTradingPermitted) return;
+   // 7. STEP 4: Active Basket Grid Layer Placement (if in active position)
+   // DECOUPLED ARCHITECTURE: Existing basket is allowed to rebalance/average-down
+   // as long as riskTelem.canManageGrid is TRUE and market is NOT in a Volatility Shock!
+   if(riskTelem.canManageGrid && alphaTelem.regime != REGIME_VOLATILITY_SHOCK)
+   {
+      if(gridTelem.buyOrderCount > 0 || gridTelem.sellOrderCount > 0)
+      {
+         g_gridEngine.EvaluateGridStep(currentAtr, true, true);
+      }
+   }
 
-   // 7. STEP 4: 3Commas Trailing Buy Reversal Check
+   // 8. STEP 5: New Cycle Entry Gatekeeper
+   // Strictly block opening NEW trade cycles if circuit breaker, news lockout, or streak pause is active!
+   if(!riskTelem.canOpenNewCycle) return;
+
+   // 9. STEP 6: 3Commas Trailing Buy Reversal Check
    double execLot = 0.0;
    if(g_trailingEngine.CheckTrailingSafetyTrigger(bid, ask, execLot))
    {
@@ -257,13 +269,7 @@ void OnTick()
       }
    }
 
-   // 8. STEP 5: Grid Layer Placement (if in active position)
-   if(gridTelem.buyOrderCount > 0 || gridTelem.sellOrderCount > 0)
-   {
-      g_gridEngine.EvaluateGridStep(currentAtr, true, true);
-   }
-
-   // 9. STEP 6: New Bar Signal Generation (Bar-Close Discipline)
+   // 10. STEP 7: New Bar Signal Generation (Bar-Close Discipline)
    datetime currentBarTime = iTime(_Symbol, _Period, 0);
    if(currentBarTime == g_lastBarTime) return; // Only evaluate new entries once per closed bar
    g_lastBarTime = currentBarTime;
@@ -271,28 +277,38 @@ void OnTick()
    // Evaluate Alpha Confluence Signals (Score >= 75)
    ENUM_ALPHA_SIGNAL signal = g_alphaEngine.EvaluateSignals(alphaTelem);
 
+   // DYNAMIC MICRO-ACCOUNT RISK BUDGETING: Cap single-order SL to max $3.00 (6% of $50 equity)
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   double maxRiskDollars = (equity <= 100.0) ? 3.00 : (equity * 0.02);
+   double tickVal = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double tickSz  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+   double pointVal = (tickSz > 0) ? (tickVal / tickSz) * point : 1.0;
+   double maxSlPoints = (pointVal > 0 && InpBaseLot > 0) ? (maxRiskDollars / (InpBaseLot * pointVal)) : (currentAtr * 1.5 / point);
+   double slDist = MathMin(currentAtr * 1.5, maxSlPoints * point);
+   double tpDist = currentAtr * 1.8 * 1.5;
+
    // Only open new initial entries if no opposing positions exist and basket within limits
    if(signal == ALPHA_SIGNAL_BUY && gridTelem.buyOrderCount == 0 && gridTelem.sellOrderCount == 0)
    {
-      double sl = NormalizeDouble(ask - (currentAtr * 1.5), digits);
-      double tp = NormalizeDouble(ask + (currentAtr * 1.8 * 1.5), digits);
+      double sl = NormalizeDouble(ask - slDist, digits);
+      double tp = NormalizeDouble(ask + tpDist, digits);
 
       if(g_trade.Buy(InpBaseLot, _Symbol, ask, sl, tp, "QuantumTitan_Alpha_Buy"))
       {
-         g_hud.DispatchAlert("ALPHA BUY ENTRY", StringFormat("Score: %d/100 | Regime: %s | SL: %.5f | TP: %.5f",
-            alphaTelem.totalScoreBuy, alphaTelem.regimeName, sl, tp));
+         g_hud.DispatchAlert("ALPHA BUY ENTRY", StringFormat("Score: %d/100 | Regime: %s | SL: %.5f ($%.2f risk) | TP: %.5f",
+            alphaTelem.totalScoreBuy, alphaTelem.regimeName, sl, maxRiskDollars, tp));
          g_hud.DrawTradeArrow("BUY_" + IntegerToString((int)TimeCurrent()), TimeCurrent(), ask, true);
       }
    }
    else if(signal == ALPHA_SIGNAL_SELL && gridTelem.buyOrderCount == 0 && gridTelem.sellOrderCount == 0)
    {
-      double sl = NormalizeDouble(bid + (currentAtr * 1.5), digits);
-      double tp = NormalizeDouble(bid - (currentAtr * 1.8 * 1.5), digits);
+      double sl = NormalizeDouble(bid + slDist, digits);
+      double tp = NormalizeDouble(bid - tpDist, digits);
 
       if(g_trade.Sell(InpBaseLot, _Symbol, bid, sl, tp, "QuantumTitan_Alpha_Sell"))
       {
-         g_hud.DispatchAlert("ALPHA SELL ENTRY", StringFormat("Score: %d/100 | Regime: %s | SL: %.5f | TP: %.5f",
-            alphaTelem.totalScoreSell, alphaTelem.regimeName, sl, tp));
+         g_hud.DispatchAlert("ALPHA SELL ENTRY", StringFormat("Score: %d/100 | Regime: %s | SL: %.5f ($%.2f risk) | TP: %.5f",
+            alphaTelem.totalScoreSell, alphaTelem.regimeName, sl, maxRiskDollars, tp));
          g_hud.DrawTradeArrow("SELL_" + IntegerToString((int)TimeCurrent()), TimeCurrent(), bid, false);
       }
    }

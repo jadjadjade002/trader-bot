@@ -23,7 +23,9 @@ struct RiskTelemetry
    string   newsEventName;
    int      completedTradesToday;
    int      consecutiveLosses;
-   bool     tradingPermitted;
+   bool     canOpenNewCycle;       // Allowed to open new trade cycles
+   bool     canManageGrid;         // Allowed to manage active grid layers
+   bool     tradingPermitted;      // Overall status
    string   rejectReason;
 };
 
@@ -145,11 +147,29 @@ bool CRiskGuardian::Init(string symbol, ulong magic, double maxDDPct, double har
    else
       m_trade.SetTypeFilling(ORDER_FILLING_RETURN);
 
-   // Initialize Daily Equity & HWM
+   // Initialize Daily Equity & HWM with GlobalVariable Persistence
    m_currentDay = iTime(m_symbol, PERIOD_D1, 0);
    m_startingDailyEquity = AccountInfoDouble(ACCOUNT_EQUITY);
-   m_dailyHighWaterMark = m_startingDailyEquity;
-   m_circuitBreakerTripped = false;
+
+   string gvHwm = StringFormat("QT_%I64u_HWM", m_magic);
+   string gvDay = StringFormat("QT_%I64u_DAY", m_magic);
+   string gvCB  = StringFormat("QT_%I64u_CB", m_magic);
+
+   if(GlobalVariableCheck(gvDay) && (datetime)GlobalVariableGet(gvDay) == m_currentDay)
+   {
+      m_dailyHighWaterMark = GlobalVariableGet(gvHwm);
+      m_circuitBreakerTripped = (GlobalVariableGet(gvCB) > 0.5);
+      PrintFormat("[RiskGuardian] RESTORED PERSISTENT STATE: HWM=$%.2f, CircuitBreaker=%s",
+         m_dailyHighWaterMark, m_circuitBreakerTripped ? "TRIPPED" : "OFF");
+   }
+   else
+   {
+      m_dailyHighWaterMark = m_startingDailyEquity;
+      m_circuitBreakerTripped = false;
+      GlobalVariableSet(gvDay, (double)m_currentDay);
+      GlobalVariableSet(gvHwm, m_dailyHighWaterMark);
+      GlobalVariableSet(gvCB, 0.0);
+   }
 
    PrintFormat("[RiskGuardian] Initialized for %s (DailyMaxDD: %.1f%%, HardFloor: $%.2f, MaxLossStreak: %d)",
       m_symbol, m_maxDailyLossPct, m_hardEquityFloor, m_maxLosingStreak);
@@ -162,20 +182,28 @@ bool CRiskGuardian::Init(string symbol, ulong magic, double maxDDPct, double har
 void CRiskGuardian::CheckNewDay()
 {
    datetime today = iTime(m_symbol, PERIOD_D1, 0);
+   string gvHwm = StringFormat("QT_%I64u_HWM", m_magic);
+   string gvDay = StringFormat("QT_%I64u_DAY", m_magic);
+   string gvCB  = StringFormat("QT_%I64u_CB", m_magic);
+
    if(today != m_currentDay && today > 0)
    {
       m_currentDay = today;
       m_startingDailyEquity = AccountInfoDouble(ACCOUNT_EQUITY);
       m_dailyHighWaterMark = m_startingDailyEquity;
       m_circuitBreakerTripped = false;
+      GlobalVariableSet(gvDay, (double)m_currentDay);
+      GlobalVariableSet(gvHwm, m_dailyHighWaterMark);
+      GlobalVariableSet(gvCB, 0.0);
       PrintFormat("[RiskGuardian] NEW TRADING DAY DETECTED. Reset HWM: $%.2f", m_dailyHighWaterMark);
    }
 
-   // Continuously track peak equity
+   // Continuously track peak equity and persist
    double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
    if(currentEquity > m_dailyHighWaterMark)
    {
       m_dailyHighWaterMark = currentEquity;
+      GlobalVariableSet(gvHwm, m_dailyHighWaterMark);
    }
 }
 
@@ -222,6 +250,18 @@ bool CRiskGuardian::IsInNewsWindow(string &eventName)
 {
    if(!m_useNewsFilter) return false;
 
+   // 1. REAL-TIME MICROSTRUCTURE SPREAD SURGE CHECK (ZERO CACHE - EVALUATED EVERY TICK)
+   double ask = SymbolInfoDouble(m_symbol, SYMBOL_ASK);
+   double bid = SymbolInfoDouble(m_symbol, SYMBOL_BID);
+   double point = SymbolInfoDouble(m_symbol, SYMBOL_POINT);
+   double currentSpread = (point > 0) ? (ask - bid) / point : 0;
+   if(currentSpread >= (m_maxSpreadPoints * 0.70))
+   {
+      eventName = StringFormat("PROXY: Spread Surge %.1f pts (Real-Time Microstructure)", currentSpread);
+      return true;
+   }
+
+   // 2. CALENDAR-BASED NEWS QUERY (Cached for 30 seconds)
    datetime serverTime = TimeTradeServer();
    if(serverTime - m_lastNewsCheckTime < 30 && m_lastNewsCheckTime > 0)
    {
@@ -232,30 +272,35 @@ bool CRiskGuardian::IsInNewsWindow(string &eventName)
    datetime timeFrom = serverTime - (m_newsBufferAfterMins * 60);
    datetime timeTo   = serverTime + (m_newsBufferBeforeMins * 60);
 
-   MqlCalendarValue values[];
-   string currencyFilter = m_filterUSDOnly ? "USD" : NULL;
+   // Extract relevant currencies for this asset (Base, Profit, and USD)
+   string currs[3];
+   int currCount = 0;
+   string baseCurr = SymbolInfoString(m_symbol, SYMBOL_CURRENCY_BASE);
+   string profitCurr = SymbolInfoString(m_symbol, SYMBOL_CURRENCY_PROFIT);
 
-   int count = CalendarValueHistory(values, timeFrom, timeTo, NULL, currencyFilter);
-   if(count <= 0)
-   {
-      m_lastNewsCheckTime = serverTime;
-      m_cachedNewsResult = false;
-      m_cachedNewsEvent = "";
-      return false;
-   }
+   if(baseCurr != "") { currs[currCount++] = baseCurr; }
+   if(profitCurr != "" && profitCurr != baseCurr) { currs[currCount++] = profitCurr; }
+   if(baseCurr != "USD" && profitCurr != "USD") { currs[currCount++] = "USD"; }
 
-   for(int i = 0; i < count; i++)
+   for(int c = 0; c < currCount; c++)
    {
-      MqlCalendarEvent event;
-      if(CalendarEventById(values[i].event_id, event))
+      MqlCalendarValue values[];
+      int count = CalendarValueHistory(values, timeFrom, timeTo, NULL, currs[c]);
+      if(count <= 0) continue;
+
+      for(int i = 0; i < count; i++)
       {
-         if(event.importance == CALENDAR_IMPORTANCE_HIGH)
+         MqlCalendarEvent event;
+         if(CalendarEventById(values[i].event_id, event))
          {
-            eventName = event.name + " [HIGH IMPACT]";
-            m_lastNewsCheckTime = serverTime;
-            m_cachedNewsResult = true;
-            m_cachedNewsEvent = eventName;
-            return true;
+            if(event.importance == CALENDAR_IMPORTANCE_HIGH)
+            {
+               eventName = StringFormat("[%s] %s [HIGH IMPACT]", currs[c], event.name);
+               m_lastNewsCheckTime = serverTime;
+               m_cachedNewsResult = true;
+               m_cachedNewsEvent = eventName;
+               return true;
+            }
          }
       }
    }
@@ -278,6 +323,12 @@ bool CRiskGuardian::ValidateExecution(RiskTelemetry &telemetryOut)
    telemetryOut.dailyHighWaterMark   = m_dailyHighWaterMark;
    telemetryOut.currentEquity        = currentEquity;
 
+   // Default permissions
+   telemetryOut.canOpenNewCycle  = true;
+   telemetryOut.canManageGrid    = true;
+   telemetryOut.tradingPermitted = true;
+   telemetryOut.rejectReason     = "CLEAR";
+
    // Compute Drawdown from High-Water Mark
    double ddPct = 0.0;
    if(m_dailyHighWaterMark > 0)
@@ -286,42 +337,42 @@ bool CRiskGuardian::ValidateExecution(RiskTelemetry &telemetryOut)
    }
    telemetryOut.currentDrawdownPct = ddPct;
 
-   // 1. TRIPWIRE: Hard Equity Floor ($30.00)
+   // 1. TRIPWIRE: Hard Equity Floor ($30.00) - ULTIMATE CAPITAL PRESERVATION BREAKER
    if(currentEquity < m_hardEquityFloor)
    {
+      telemetryOut.canOpenNewCycle  = false;
+      telemetryOut.canManageGrid    = false;
       telemetryOut.tradingPermitted = false;
       telemetryOut.rejectReason = StringFormat("CRITICAL: Equity $%.2f hit Hard Floor $%.2f", currentEquity, m_hardEquityFloor);
-      PrintFormat("[RiskGuardian] %s", telemetryOut.rejectReason);
+      PrintFormat("[RiskGuardian] %s - EMERGENCY LIQUIDATION TRIGGERED", telemetryOut.rejectReason);
       CloseAllPositions("Hard Floor Breached");
       return false;
    }
 
    // 2. TRIPWIRE: Daily High-Water Mark Drawdown Circuit Breaker (8.0%)
-   if(ddPct >= m_maxDailyLossPct)
+   // SOFT BREAKER: Stop new cycle entries for the day, BUT allow active basket to rebalance and exit!
+   if(ddPct >= m_maxDailyLossPct || m_circuitBreakerTripped)
    {
       m_circuitBreakerTripped = true;
+      string gvCB = StringFormat("QT_%I64u_CB", m_magic);
+      GlobalVariableSet(gvCB, 1.0);
       telemetryOut.circuitBreakerTripped = true;
-      telemetryOut.tradingPermitted = false;
-      telemetryOut.rejectReason = StringFormat("CIRCUIT BREAKER: Daily DD %.2f%% exceeded limit %.1f%%", ddPct, m_maxDailyLossPct);
-      return false;
-   }
-
-   telemetryOut.circuitBreakerTripped = m_circuitBreakerTripped;
-   if(m_circuitBreakerTripped)
-   {
-      telemetryOut.tradingPermitted = false;
-      telemetryOut.rejectReason = "CIRCUIT BREAKER: Locked until next trading day";
-      return false;
+      telemetryOut.canOpenNewCycle       = false; // Blocks Module 1 initial entries
+      telemetryOut.canManageGrid         = true;  // Allows Module 3 active basket rebalance!
+      telemetryOut.tradingPermitted      = false;
+      telemetryOut.rejectReason = StringFormat("CIRCUIT BREAKER: Daily DD %.2f%% reached (New entries locked, grid active)", ddPct);
    }
 
    // 3. TRIPWIRE: Economic Calendar News Lockout
    string newsName = "";
    if(IsInNewsWindow(newsName))
    {
-      telemetryOut.inNewsLockout = true;
-      telemetryOut.newsEventName = newsName;
+      telemetryOut.inNewsLockout    = true;
+      telemetryOut.newsEventName    = newsName;
+      telemetryOut.canOpenNewCycle  = false;
+      telemetryOut.canManageGrid    = false; // Freeze grid expansion during news surge
       telemetryOut.tradingPermitted = false;
-      telemetryOut.rejectReason = StringFormat("NEWS SHIELD: %s Lockout Active (+/-%d min)", newsName, m_newsBufferBeforeMins);
+      telemetryOut.rejectReason     = StringFormat("NEWS SHIELD: %s Lockout Active", newsName);
       return false;
    }
    telemetryOut.inNewsLockout = false;
@@ -334,6 +385,8 @@ bool CRiskGuardian::ValidateExecution(RiskTelemetry &telemetryOut)
    double currentSpread = (point > 0) ? (ask - bid) / point : 0;
    if(currentSpread > m_maxSpreadPoints)
    {
+      telemetryOut.canOpenNewCycle  = false;
+      telemetryOut.canManageGrid    = false;
       telemetryOut.tradingPermitted = false;
       telemetryOut.rejectReason = StringFormat("SPREAD EXCESSIVE: %.1f pts (Max: %.1f)", currentSpread, m_maxSpreadPoints);
       return false;
@@ -347,29 +400,39 @@ bool CRiskGuardian::ValidateExecution(RiskTelemetry &telemetryOut)
 
    if(completedTrades >= m_maxTradesPerDay)
    {
+      telemetryOut.canOpenNewCycle  = false;
       telemetryOut.tradingPermitted = false;
       telemetryOut.rejectReason = StringFormat("DAILY CAP: %d trades reached (Max: %d)", completedTrades, m_maxTradesPerDay);
-      return false;
    }
 
    if(streak >= m_maxLosingStreak)
    {
+      telemetryOut.canOpenNewCycle  = false;
       telemetryOut.tradingPermitted = false;
       telemetryOut.rejectReason = StringFormat("STREAK PAUSE: %d consecutive losses", streak);
-      return false;
    }
 
-   telemetryOut.tradingPermitted = true;
-   telemetryOut.rejectReason = "CLEAR";
-   return true;
+   return telemetryOut.tradingPermitted;
 }
 
 //+------------------------------------------------------------------+
-//| Close All Positions on Emergency                                 |
+//| Close All Positions on Emergency with Slippage & Filling Guard   |
 //+------------------------------------------------------------------+
 void CRiskGuardian::CloseAllPositions(string reason)
 {
    PrintFormat("[RiskGuardian] EMERGENCY CLOSE TRIGGERED: %s", reason);
+
+   // Adaptive execution to guarantee fill in illiquid or emergency states
+   uint filling = (uint)SymbolInfoInteger(m_symbol, SYMBOL_FILLING_MODE);
+   if((filling & SYMBOL_FILLING_IOC) != 0)
+      m_trade.SetTypeFilling(ORDER_FILLING_IOC);
+   else if((filling & SYMBOL_FILLING_FOK) != 0)
+      m_trade.SetTypeFilling(ORDER_FILLING_FOK);
+   else
+      m_trade.SetTypeFilling(ORDER_FILLING_RETURN);
+
+   m_trade.SetDeviationInPoints(50); // Increased deviation buffer for emergency close
+
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       if(!m_position.SelectByIndex(i)) continue;

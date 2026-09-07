@@ -65,6 +65,7 @@ private:
    // Internal Helpers
    void                 ScanBasket(GridOrderInfo &buyOrders[], int &buyCount, GridOrderInfo &sellOrders[], int &sellCount);
    double               NormalizeLot(double lot);
+   double               CalculateGridLot(int orderIndex);
 
 public:
                         CDynamicGridEngine();
@@ -240,6 +241,40 @@ double CDynamicGridEngine::NormalizeLot(double lot)
 }
 
 //+------------------------------------------------------------------+
+//| Calculate Next Grid Lot Size with Strict Step Normalization      |
+//+------------------------------------------------------------------+
+double CDynamicGridEngine::CalculateGridLot(int orderIndex)
+{
+   double step = SymbolInfoDouble(m_symbol, SYMBOL_VOLUME_STEP);
+   double minLot = SymbolInfoDouble(m_symbol, SYMBOL_VOLUME_MIN);
+   double maxLot = SymbolInfoDouble(m_symbol, SYMBOL_VOLUME_MAX);
+   if(step <= 0) step = 0.01;
+   if(minLot <= 0) minLot = 0.01;
+
+   double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+
+   // MICRO ACCOUNT (<$100) MANDATORY PROTECTION:
+   // On small accounts ($50), any lot escalation causes fatal margin lockout (exhausting the 60% reserve)
+   // and turns normal market breathing into catastrophic drawdown.
+   // All grid layers are strictly locked to minLot (0.01 flat) to guarantee free margin > 70%.
+   if(currentEquity <= 100.0)
+   {
+      return NormalizeLot(minLot);
+   }
+
+   // Standard Account: Geometric with Arithmetic Fallback
+   double rawLot = m_baseLot * MathPow(m_lotMultiplier, orderIndex);
+   double lot = MathRound(rawLot / step) * step;
+
+   if(orderIndex >= 1 && lot <= m_baseLot)
+   {
+      lot = m_baseLot + (step * orderIndex);
+   }
+
+   return NormalizeLot(lot);
+}
+
+//+------------------------------------------------------------------+
 //| Evaluate Dynamic Grid Step & Place Next Layer                    |
 //+------------------------------------------------------------------+
 bool CDynamicGridEngine::EvaluateGridStep(double currentAtr, bool allowBuy, bool allowSell)
@@ -265,8 +300,16 @@ bool CDynamicGridEngine::EvaluateGridStep(double currentAtr, bool allowBuy, bool
    double gridStepDist = currentAtr * m_stepAtrMultiplier;
    m_telemetry.currentGridStep = gridStepDist;
 
+   // Micro Account Safety: On equity <= $100, clamp max grid layers to 2 orders per side
+   int effectiveMaxOrders = m_maxOrdersPerSide;
+   double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(currentEquity <= 100.0)
+   {
+      effectiveMaxOrders = MathMin(m_maxOrdersPerSide, 2);
+   }
+
    // 1. Evaluate BUY Grid
-   if(allowBuy && buyCount > 0 && buyCount < m_maxOrdersPerSide)
+   if(allowBuy && buyCount > 0 && buyCount < effectiveMaxOrders)
    {
       // Find lowest buy price
       double lowestBuy = buyOrders[0].openPrice;
@@ -279,7 +322,7 @@ bool CDynamicGridEngine::EvaluateGridStep(double currentAtr, bool allowBuy, bool
       if((lowestBuy - ask) >= gridStepDist)
       {
          // Calculate next geometric lot size normalized
-         double nextLot = NormalizeLot(m_baseLot * MathPow(m_lotMultiplier, buyCount));
+         double nextLot = CalculateGridLot(buyCount);
 
          PrintFormat("[DynamicGrid] Placing BUY Grid #%d at Ask: %.5f (Lowest: %.5f, Dist: %.1f pts, Lot: %.2f)",
             buyCount + 1, ask, lowestBuy, (lowestBuy - ask) / point, nextLot);
@@ -292,7 +335,7 @@ bool CDynamicGridEngine::EvaluateGridStep(double currentAtr, bool allowBuy, bool
    }
 
    // 2. Evaluate SELL Grid
-   if(allowSell && sellCount > 0 && sellCount < m_maxOrdersPerSide)
+   if(allowSell && sellCount > 0 && sellCount < effectiveMaxOrders)
    {
       // Find highest sell price
       double highestSell = sellOrders[0].openPrice;
@@ -305,7 +348,7 @@ bool CDynamicGridEngine::EvaluateGridStep(double currentAtr, bool allowBuy, bool
       if((bid - highestSell) >= gridStepDist)
       {
          // Calculate next geometric lot size normalized
-         double nextLot = NormalizeLot(m_baseLot * MathPow(m_lotMultiplier, sellCount));
+         double nextLot = CalculateGridLot(sellCount);
 
          PrintFormat("[DynamicGrid] Placing SELL Grid #%d at Bid: %.5f (Highest: %.5f, Dist: %.1f pts, Lot: %.2f)",
             sellCount + 1, bid, highestSell, (bid - highestSell) / point, nextLot);
@@ -362,6 +405,41 @@ bool CDynamicGridEngine::CheckAndCloseBasket(double currentAtr)
       {
          PrintFormat("[DynamicGrid] BASKET REBALANCE: Closing %d SELL orders at +$%.2f profit (AvgPrice: %.5f, Ask: %.5f)",
             sellCount, m_telemetry.totalSellProfit, m_telemetry.avgSellPrice, ask);
+         CloseAllGridOrders(POSITION_TYPE_SELL);
+         closedAny = true;
+      }
+   }
+
+   // 3. Emergency Protection on Micro Accounts (Equity <= $100)
+   double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(currentEquity <= 100.0)
+   {
+      // Single order protection: prevent lone position bleeding out (Max $3.00 loss = 6% risk)
+      if(buyCount == 1 && m_telemetry.totalBuyProfit <= -3.00)
+      {
+         PrintFormat("[DynamicGrid] EMERGENCY DEFENSIVE CUT: 1 BUY order hit -$%.2f risk cap", MathAbs(m_telemetry.totalBuyProfit));
+         CloseAllGridOrders(POSITION_TYPE_BUY);
+         closedAny = true;
+      }
+      if(sellCount == 1 && m_telemetry.totalSellProfit <= -3.00)
+      {
+         PrintFormat("[DynamicGrid] EMERGENCY DEFENSIVE CUT: 1 SELL order hit -$%.2f risk cap", MathAbs(m_telemetry.totalSellProfit));
+         CloseAllGridOrders(POSITION_TYPE_SELL);
+         closedAny = true;
+      }
+
+      // Basket protection (Max $10.00 loss = 20% risk)
+      if(buyCount >= 2 && m_telemetry.totalBuyProfit <= -10.0)
+      {
+         PrintFormat("[DynamicGrid] EMERGENCY BASKET CUT: Closing %d BUY orders at -$%.2f loss to protect capital",
+            buyCount, MathAbs(m_telemetry.totalBuyProfit));
+         CloseAllGridOrders(POSITION_TYPE_BUY);
+         closedAny = true;
+      }
+      if(sellCount >= 2 && m_telemetry.totalSellProfit <= -10.0)
+      {
+         PrintFormat("[DynamicGrid] EMERGENCY BASKET CUT: Closing %d SELL orders at -$%.2f loss to protect capital",
+            sellCount, MathAbs(m_telemetry.totalSellProfit));
          CloseAllGridOrders(POSITION_TYPE_SELL);
          closedAny = true;
       }

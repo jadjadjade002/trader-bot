@@ -198,7 +198,20 @@ ENUM_MARKET_REGIME CAlphaScoringEngine::DetectRegime()
    m_telemetry.atrValue = currentAtr;
    m_telemetry.atrBaseline = avgAtr;
 
-   // 1. Check for Volatility Shock (News or Sudden Spike)
+   // 1. Check for Real-Time Live Candle Volatility Shock (Bar 0 - Zero Lag)
+   MqlRates liveBar[1];
+   if(CopyRates(m_symbol, m_timeframe, 0, 1, liveBar) > 0)
+   {
+      double liveCandleRange = liveBar[0].high - liveBar[0].low;
+      if(avgAtr > 0 && (liveCandleRange / avgAtr) >= m_shockMultiplier)
+      {
+         m_telemetry.regime = REGIME_VOLATILITY_SHOCK;
+         m_telemetry.regimeName = "REALTIME_SHOCK";
+         return REGIME_VOLATILITY_SHOCK;
+      }
+   }
+
+   // 2. Check for Completed Bar Volatility Shock (Bar 1)
    if(avgAtr > 0 && (currentAtr / avgAtr) >= m_shockMultiplier)
    {
       m_telemetry.regime = REGIME_VOLATILITY_SHOCK;
