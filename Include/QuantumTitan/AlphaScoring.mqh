@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                AlphaScoring.mqh  |
-//|               QuantumTitan v10 Singularity Architecture          |
+//|               QuantumTitan v10.10 Singularity Architecture       |
 //|               Module 1: Market Regime & Confluence Scoring       |
 //|               Beating Benchmark: Cryptohopper Strategy Designer  |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.00"
+#property version   "10.10"
 
 //--- Market Regime Enumeration
 enum ENUM_MARKET_REGIME
@@ -391,6 +391,15 @@ ENUM_ALPHA_SIGNAL CAlphaScoringEngine::EvaluateSignals(AlphaScoreTelemetry &tele
       return ALPHA_SIGNAL_NONE; // Absolute pause during black swan / shock
    }
 
+   // CRITICAL GATE 2: Strict Trend-Discipline Gatekeeper
+   // Directional cycle entries in CHOP_RANGE are strictly prohibited.
+   // CHOP_RANGE produces false breakouts where spread consumes 25-35% of SL buffer.
+   if(regime == REGIME_CHOP_RANGE)
+   {
+      telemetryOut = m_telemetry;
+      return ALPHA_SIGNAL_NONE;
+   }
+
    // Component 1: Higher Timeframe Trend Bias (Max 30 Points)
    double htfEma20[1], htfEma50[1], htfEma200[1];
    if(CopyBuffer(m_handleEMA20, 0, 1, 1, htfEma20) > 0 &&
@@ -491,12 +500,12 @@ ENUM_ALPHA_SIGNAL CAlphaScoringEngine::EvaluateSignals(AlphaScoreTelemetry &tele
 
    telemetryOut = m_telemetry;
 
-   // Final Signal Decision based on 75-point Confluence Threshold
-   if(m_telemetry.totalScoreBuy >= m_scoreThreshold && m_telemetry.totalScoreBuy > m_telemetry.totalScoreSell)
+   // Final Signal Decision based on 75-point Confluence Threshold AND strict Regime Alignment
+   if(m_telemetry.totalScoreBuy >= m_scoreThreshold && m_telemetry.totalScoreBuy > m_telemetry.totalScoreSell && regime == REGIME_TREND_BULL)
    {
       return ALPHA_SIGNAL_BUY;
    }
-   else if(m_telemetry.totalScoreSell >= m_scoreThreshold && m_telemetry.totalScoreSell > m_telemetry.totalScoreBuy)
+   else if(m_telemetry.totalScoreSell >= m_scoreThreshold && m_telemetry.totalScoreSell > m_telemetry.totalScoreBuy && regime == REGIME_TREND_BEAR)
    {
       return ALPHA_SIGNAL_SELL;
    }

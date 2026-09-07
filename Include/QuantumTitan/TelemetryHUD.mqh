@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                 TelemetryHUD.mqh |
-//|               QuantumTitan v10 Singularity Architecture          |
+//|               QuantumTitan v10.10 Singularity Architecture       |
 //|               Module 5: Real-time Visual Matrix HUD & Alerts     |
 //|               Institutional On-Chart Telemetry & Notifications   |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.00"
+#property version   "10.10"
 
 #define QT_HUD_PREFIX "QT9_HUD_"
 
@@ -156,7 +156,7 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateCard("BG", startX, startY, cardW, cardH, C'20,24,35', C'45,55,75');
 
    // 2. Header
-   CreateLabel("HDR", startX + 15, startY + 12, "⚡ QUANTUMTITAN v10 SINGULARITY", clrCyan, 10, "Trebuchet MS");
+   CreateLabel("HDR", startX + 15, startY + 12, "⚡ QUANTUMTITAN v10.10 SINGULARITY", clrCyan, 10, "Trebuchet MS");
    
    // Status Pill
    string statusBadge = isTradingPermitted ? "🟢 ACTIVE [OPERATIONAL]" : "🔴 PAUSED [" + statusReason + "]";
@@ -199,7 +199,7 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateLabel("NEWS", startX + 15, startY + 168, newsStr, newsClr, 9, "Trebuchet MS");
 
    // 9. Institutional Signature
-   CreateLabel("FOOTER", startX + 15, startY + 192, "Institutional Quant Multi-Agent Framework v9.00", C'120,135,160', 8, "Trebuchet MS");
+   CreateLabel("FOOTER", startX + 15, startY + 192, "Institutional Quant Multi-Agent Framework v10.10", C'120,135,160', 8, "Trebuchet MS");
 
    ChartRedraw(0);
 }
@@ -251,7 +251,7 @@ void CTelemetryHUD::DispatchAlert(string title, string message, bool isUrgent)
    if(!isUrgent && (now - m_lastAlertTime < 5)) return;
    m_lastAlertTime = now;
 
-   string fullMessage = StringFormat("[QuantumTitan v9] %s: %s", title, message);
+   string fullMessage = StringFormat("[QuantumTitan v10.10] %s: %s", title, message);
 
    if(m_sendPop)
    {

@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //|                                  QuantumTitan_v9_Singularity.mq5 |
-//|           v10.00 Singularity Institutional Quant Framework       |
+//|          v10.10 Singularity Institutional Quant Framework        |
 //|      Multi-Agent Autonomous Trading System: Top 1% Standard      |
 //|      Surpassing Benchmarks: Pionex, 3Commas, Cryptohopper        |
 //|                    Chief Engineer: Gemini Quantum                |
 //+------------------------------------------------------------------+
-#property copyright "QuantumTitan Institutional Quant Framework v10.00"
+#property copyright "QuantumTitan Institutional Quant Framework v10.10"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.00"
-#property description "v10.00 Singularity: Institutional Adversarial Hardened Matrix (50-Cycle Continuous Protocol)"
+#property version   "10.10"
+#property description "v10.10 Singularity: Trend-Disciplined Regime Matrix, HTF-Anchored Risk Budgeting"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -85,7 +85,7 @@ int                    g_handleAtrMain = INVALID_HANDLE;
 int OnInit()
 {
    Print("══════════════════════════════════════════════════════════════");
-   Print("🚀 INITIALIZING QUANTUMTITAN v9+++ SINGULARITY...");
+   Print("🚀 INITIALIZING QUANTUMTITAN v10 SINGULARITY...");
    Print("══════════════════════════════════════════════════════════════");
 
    // 1. Demo Lock Check
@@ -140,7 +140,7 @@ int OnInit()
 
    // 7. Initialize Module 3: ATR Geometric Grid Engine (vs Pionex)
    if(!g_gridEngine.Init(_Symbol, InpMagicNumber, InpBaseLot, InpMaxGridOrdersPerSide,
-                         InpGridStepAtrMult, InpLotMultiplier, InpMinMarginReservePct))
+                         InpGridStepAtrMult, InpLotMultiplier, InpMinMarginReservePct, InpBasketTpAtrMult))
    {
       Print("❌ Failed to initialize Module 3: Dynamic Grid Engine");
       return INIT_FAILED;
@@ -163,12 +163,12 @@ int OnInit()
    }
 
    g_lastBarTime = iTime(_Symbol, _Period, 0);
-   g_hud.DispatchAlert("SYSTEM BOOT", "QuantumTitan v10 Singularity activated successfully.", true);
+   g_hud.DispatchAlert("SYSTEM BOOT", "QuantumTitan v10.10 Singularity activated successfully.", true);
 
-   Print("✅ QUANTUMTITAN v10 SINGULARITY INITIALIZED WITH 0 ERRORS.");
-   Print("   • Module 1 (Alpha Scoring)  : ACTIVE (Min Score: ", InpScoreThreshold, ")");
+   Print("✅ QUANTUMTITAN v10.10 SINGULARITY INITIALIZED WITH 0 ERRORS.");
+   Print("   • Module 1 (Alpha Scoring)  : ACTIVE (Min Score: ", InpScoreThreshold, ", Strict Trend-Gate)");
    Print("   • Module 2 (TTP & Safety)   : ACTIVE (BE: ", InpBreakEvenTriggerR, "R, Trail: ", InpTrailingTriggerR, "R)");
-   Print("   • Module 3 (Geometric Grid) : ACTIVE (Max Orders: ", InpMaxGridOrdersPerSide, ", Cash Buffer: ", InpMinMarginReservePct, "%)");
+   Print("   • Module 3 (Geometric Grid) : ACTIVE (Max Orders: ", InpMaxGridOrdersPerSide, ", Cash Buffer: ", InpMinMarginReservePct, "%, TP Mult: ", InpBasketTpAtrMult, ")");
    Print("   • Module 4 (Risk Guardian)  : ACTIVE (HWM Loss: ", InpMaxDailyLossPct, "%, Floor: $", InpHardEquityFloor, ")");
    Print("   • Module 5 (Matrix HUD)     : ACTIVE");
    Print("══════════════════════════════════════════════════════════════");
@@ -181,7 +181,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-   Print("🛑 Deinitializing QuantumTitan v10 Singularity... Reason: ", reason);
+   Print("🛑 Deinitializing QuantumTitan v10.10 Singularity... Reason: ", reason);
    if(g_handleAtrMain != INVALID_HANDLE)
    {
       IndicatorRelease(g_handleAtrMain);
@@ -314,8 +314,11 @@ void OnTick()
    double tickSz  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    double pointVal = (tickSz > 0) ? (tickVal / tickSz) * point : 1.0;
    double maxSlPoints = (pointVal > 0 && InpBaseLot > 0) ? (maxRiskDollars / (InpBaseLot * pointVal)) : ((point > 0.0) ? (currentAtr * 1.5 / point) : 100.0);
-   double slDist = MathMin(currentAtr * 1.5, maxSlPoints * point);
-   double tpDist = currentAtr * 1.8 * 1.5;
+   // Micro-Account Anti-Spread Noise Guard: Ensure Gold has at least 300 points ($3.00) room, avoiding spread hunting
+   double minSafeSlDist = (point > 0.0) ? (300.0 * point) : 0.30;
+   double targetSlDist  = MathMax(currentAtr * 1.5, minSafeSlDist);
+   double slDist        = MathMin(targetSlDist, maxSlPoints * point);
+   double tpDist        = MathMax(currentAtr * 2.2, slDist * 1.5);
 
    bool orderFilled = false;
 
@@ -389,9 +392,13 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
             long entry = HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
             if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT)
             {
-               double pnl = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
-               PrintFormat("[QuantumTitan v9] DEAL CLOSED #%I64u: PnL: %s$%.2f",
-                  dealTicket, (pnl >= 0 ? "+" : ""), pnl);
+               double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+               double swap   = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
+               double comm   = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+               double fee    = HistoryDealGetDouble(dealTicket, DEAL_FEE);
+               double netPnl = profit + swap + comm + fee;
+               PrintFormat("[QuantumTitan v10.10] DEAL CLOSED #%I64u: Net PnL: %s$%.2f (Profit: $%.2f, Swap: $%.2f, Comm: $%.2f)",
+                  dealTicket, (netPnl >= 0 ? "+" : ""), netPnl, profit, swap, comm);
                g_riskGuardian.InvalidateStatsCache();
             }
          }

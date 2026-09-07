@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                              TrailingSafety.mqh  |
-//|               QuantumTitan v10 Singularity Architecture          |
+//|               QuantumTitan v10.10 Singularity Architecture       |
 //|               Module 2: Dynamic Trailing & Reversal Safety        |
 //|               Beating Benchmark: 3Commas TTP & Trailing Buy       |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.00"
+#property version   "10.10"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -136,6 +136,15 @@ bool CTrailingSafetyEngine::Init(string symbol, ulong magic, double beR, double 
 
    m_trade.SetExpertMagicNumber(m_magic);
    m_trade.SetDeviationInPoints(20);
+
+   // Dynamic Filling Mode Resolution
+   uint filling = (uint)SymbolInfoInteger(m_symbol, SYMBOL_FILLING_MODE);
+   if((filling & SYMBOL_FILLING_FOK) != 0)
+      m_trade.SetTypeFilling(ORDER_FILLING_FOK);
+   else if((filling & SYMBOL_FILLING_IOC) != 0)
+      m_trade.SetTypeFilling(ORDER_FILLING_IOC);
+   else
+      m_trade.SetTypeFilling(ORDER_FILLING_RETURN);
 
    PrintFormat("[TrailingSafety] Initialized for %s (Magic: %d, BE: %.1fR, Trail: %.1fR, ATRMult: %.2f)",
       m_symbol, m_magic, m_beTriggerR, m_trailTriggerR, m_atrMultiplier);

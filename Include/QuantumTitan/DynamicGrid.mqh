@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                  DynamicGrid.mqh |
-//|               QuantumTitan v10 Singularity Architecture          |
+//|               QuantumTitan v10.10 Singularity Architecture       |
 //|               Module 3: ATR Geometric Grid & Dynamic Rebalancer  |
 //|               Beating Benchmark: Pionex Infinity Grid            |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.00"
+#property version   "10.10"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -80,7 +80,8 @@ public:
                        ~CDynamicGridEngine();
 
    bool                 Init(string symbol, ulong magic, double baseLot = 0.01, int maxOrders = 4,
-                             double stepAtrMult = 1.0, double lotMult = 1.25, double minMarginPct = 60.0);
+                             double stepAtrMult = 1.0, double lotMult = 1.25, double minMarginPct = 60.0,
+                             double basketTpAtrMult = 0.8);
 
    // Core Evaluation & Execution
    bool                 EvaluateGridStep(double currentAtr, bool allowBuy, bool allowSell);
@@ -126,7 +127,8 @@ CDynamicGridEngine::~CDynamicGridEngine()
 //| Initialization                                                   |
 //+------------------------------------------------------------------+
 bool CDynamicGridEngine::Init(string symbol, ulong magic, double baseLot, int maxOrders,
-                             double stepAtrMult, double lotMult, double minMarginPct)
+                             double stepAtrMult, double lotMult, double minMarginPct,
+                             double basketTpAtrMult)
 {
    m_symbol = (symbol == "") ? _Symbol : symbol;
    m_magic = magic;
@@ -135,6 +137,7 @@ bool CDynamicGridEngine::Init(string symbol, ulong magic, double baseLot, int ma
    m_stepAtrMultiplier = stepAtrMult;
    m_lotMultiplier = lotMult;
    m_minMarginReservePct = minMarginPct;
+   m_basketTpAtrMult = basketTpAtrMult;
    m_pendingBuyActive = false;
    m_pendingBuyAnchorPrice = 0.0;
    m_pendingBuyLayerIndex = 0;
@@ -188,7 +191,7 @@ void CDynamicGridEngine::ScanBasket(GridOrderInfo &buyOrders[], int &buyCount, G
       long   type   = m_position.PositionType();
       double volume = m_position.Volume();
       double price  = m_position.PriceOpen();
-      double profit = m_position.Profit() + m_position.Swap();
+      double profit = m_position.Profit() + m_position.Swap() + m_position.Commission();
 
       if(type == POSITION_TYPE_BUY)
       {
@@ -385,19 +388,21 @@ bool CDynamicGridEngine::EvaluateGridStep(double currentAtr, bool allowBuy, bool
 
          // PREDICTIVE MARGIN SIMULATION: Verify post-trade free margin >= m_minMarginReservePct
          double simulatedMargin = 0.0;
-         if(OrderCalcMargin(ORDER_TYPE_BUY, m_symbol, nextLot, ask, simulatedMargin))
+         if(!OrderCalcMargin(ORDER_TYPE_BUY, m_symbol, nextLot, ask, simulatedMargin))
          {
-            double equity = AccountInfoDouble(ACCOUNT_EQUITY);
-            if(equity <= 0.0) return false;
-            double freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
-            double projectedFreeMarginPct = ((freeMargin - simulatedMargin) / equity) * 100.0;
+            PrintFormat("[DynamicGrid] OrderCalcMargin failed for BUY %.2f lot. Blocking order for margin safety.", nextLot);
+            return false;
+         }
+         double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+         if(equity <= 0.0) return false;
+         double freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+         double projectedFreeMarginPct = ((freeMargin - simulatedMargin) / equity) * 100.0;
 
-            if(projectedFreeMarginPct < m_minMarginReservePct)
-            {
-               PrintFormat("[DynamicGrid] PREDICTIVE MARGIN DEFICIT: Adding BUY %.2f lot requires $%.2f margin. Projected Free Margin: %.1f%% < %.1f%%. Layer blocked.",
-                  nextLot, simulatedMargin, projectedFreeMarginPct, m_minMarginReservePct);
-               return false;
-            }
+         if(projectedFreeMarginPct < m_minMarginReservePct)
+         {
+            PrintFormat("[DynamicGrid] PREDICTIVE MARGIN DEFICIT: Adding BUY %.2f lot requires $%.2f margin. Projected Free Margin: %.1f%% < %.1f%%. Layer blocked.",
+               nextLot, simulatedMargin, projectedFreeMarginPct, m_minMarginReservePct);
+            return false;
          }
 
          PrintFormat("[DynamicGrid] Executing BUY Grid #%d at Mid: %.5f (Anchor: %.5f, Lowest: %.5f, Lot: %.2f)",
@@ -466,19 +471,21 @@ bool CDynamicGridEngine::EvaluateGridStep(double currentAtr, bool allowBuy, bool
 
          // PREDICTIVE MARGIN SIMULATION: Verify post-trade free margin >= m_minMarginReservePct
          double simulatedMargin = 0.0;
-         if(OrderCalcMargin(ORDER_TYPE_SELL, m_symbol, nextLot, bid, simulatedMargin))
+         if(!OrderCalcMargin(ORDER_TYPE_SELL, m_symbol, nextLot, bid, simulatedMargin))
          {
-            double equity = AccountInfoDouble(ACCOUNT_EQUITY);
-            if(equity <= 0.0) return false;
-            double freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
-            double projectedFreeMarginPct = ((freeMargin - simulatedMargin) / equity) * 100.0;
+            PrintFormat("[DynamicGrid] OrderCalcMargin failed for SELL %.2f lot. Blocking order for margin safety.", nextLot);
+            return false;
+         }
+         double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+         if(equity <= 0.0) return false;
+         double freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+         double projectedFreeMarginPct = ((freeMargin - simulatedMargin) / equity) * 100.0;
 
-            if(projectedFreeMarginPct < m_minMarginReservePct)
-            {
-               PrintFormat("[DynamicGrid] PREDICTIVE MARGIN DEFICIT: Adding SELL %.2f lot requires $%.2f margin. Projected Free Margin: %.1f%% < %.1f%%. Layer blocked.",
-                  nextLot, simulatedMargin, projectedFreeMarginPct, m_minMarginReservePct);
-               return false;
-            }
+         if(projectedFreeMarginPct < m_minMarginReservePct)
+         {
+            PrintFormat("[DynamicGrid] PREDICTIVE MARGIN DEFICIT: Adding SELL %.2f lot requires $%.2f margin. Projected Free Margin: %.1f%% < %.1f%%. Layer blocked.",
+               nextLot, simulatedMargin, projectedFreeMarginPct, m_minMarginReservePct);
+            return false;
          }
 
          PrintFormat("[DynamicGrid] Executing SELL Grid #%d at Mid: %.5f (Anchor: %.5f, Highest: %.5f, Lot: %.2f)",

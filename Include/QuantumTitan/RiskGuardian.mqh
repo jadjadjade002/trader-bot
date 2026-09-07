@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //|                                                 RiskGuardian.mqh |
-//|               QuantumTitan v10 Singularity Architecture          |
+//|               QuantumTitan v10.10 Singularity Architecture       |
 //|               Module 4: Institutional Capital & Risk Guardian    |
 //|               High-Water Mark Drawdown, News Shield, Breakers    |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Institutional Quant Lab"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "10.00"
+#property version   "10.10"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -510,12 +510,25 @@ void CRiskGuardian::CloseAllPositions(string reason)
 
    m_trade.SetDeviationInPoints(50); // Increased deviation buffer for emergency close
 
-   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   const int maxRetries = 3;
+   for(int attempt = 1; attempt <= maxRetries; attempt++)
    {
-      if(!m_position.SelectByIndex(i)) continue;
-      if(m_position.Symbol() == m_symbol && m_position.Magic() == m_magic)
+      int remaining = 0;
+      for(int i = PositionsTotal() - 1; i >= 0; i--)
       {
-         m_trade.PositionClose(m_position.Ticket());
+         if(!m_position.SelectByIndex(i)) continue;
+         if(m_position.Symbol() == m_symbol && m_position.Magic() == m_magic)
+         {
+            if(!m_trade.PositionClose(m_position.Ticket()))
+            {
+               remaining++;
+               PrintFormat("[RiskGuardian] Attempt %d: Failed to close #%I64u (Retcode: %u). Retrying...",
+                  attempt, m_position.Ticket(), m_trade.ResultRetcode());
+            }
+         }
       }
+
+      if(remaining == 0) break;
+      if(attempt < maxRetries) Sleep(100);
    }
 }
