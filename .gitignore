@@ -5,6 +5,8 @@
 .idea/
 *.key
 *.pem
+*.pub
+key/
 cloud_deploy/
 
 # Local credentials and confidential files
