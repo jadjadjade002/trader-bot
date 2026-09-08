@@ -624,11 +624,14 @@ bool CDynamicGridEngine::CloseAllGridOrders(long filterType)
          long posType = m_position.PositionType();
          if(filterType == -1 || posType == filterType)
          {
-            if(!m_trade.PositionClose(m_position.Ticket()))
+            ulong closeTicket = m_position.Ticket();
+            // Race-condition guard: confirm position still exists before closing
+            if(!PositionSelectByTicket(closeTicket)) continue;
+            if(!m_trade.PositionClose(closeTicket))
             {
                remaining++;
                PrintFormat("[DynamicGrid] Attempt %d: Failed to close #%I64u (Retcode: %u). Retrying...",
-                  attempt, m_position.Ticket(), m_trade.ResultRetcode());
+                  attempt, closeTicket, m_trade.ResultRetcode());
             }
          }
       }
@@ -670,7 +673,9 @@ void CDynamicGridEngine::SyncBasketTakeProfit(long filterType, double targetTp)
       double curTp = m_position.TakeProfit();
       if(MathAbs(curTp - targetTp) > (2.0 * point))
       {
-         m_trade.PositionModify(m_position.Ticket(), m_position.StopLoss(), targetTp);
+         // Race-condition guard: confirm position still exists before modifying
+         if(PositionSelectByTicket(m_position.Ticket()))
+            m_trade.PositionModify(m_position.Ticket(), m_position.StopLoss(), targetTp);
       }
    }
 }

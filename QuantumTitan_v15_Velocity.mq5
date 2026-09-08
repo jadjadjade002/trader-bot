@@ -170,13 +170,14 @@ bool CalculateSqueezeMomentum(SqueezeState &state)
 //+------------------------------------------------------------------+
 //| Check Active Position Count for this EA                          |
 //+------------------------------------------------------------------+
-int GetActivePositionCount(ulong magic, double &openPrice, double &currentSl, double &currentPnl, long &posType)
+int GetActivePositionCount(ulong magic, double &openPrice, double &currentSl, double &currentPnl, long &posType, ulong &outTicket)
 {
    int count = 0;
    openPrice = 0.0;
    currentSl = 0.0;
    currentPnl = 0.0;
    posType = -1;
+   outTicket = 0;
 
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
@@ -188,6 +189,7 @@ int GetActivePositionCount(ulong magic, double &openPrice, double &currentSl, do
          currentSl  = g_position.StopLoss();
          currentPnl = g_position.Profit() + g_position.Swap() + g_position.Commission();
          posType    = g_position.PositionType();
+         outTicket  = g_position.Ticket();
       }
    }
    return count;
@@ -196,7 +198,7 @@ int GetActivePositionCount(ulong magic, double &openPrice, double &currentSl, do
 //+------------------------------------------------------------------+
 //| Manage Active Position (Instant Breakeven Lock & Protection)     |
 //+------------------------------------------------------------------+
-void ManagePosition(long posType, double openPrice, double currentSl)
+void ManagePosition(long posType, double openPrice, double currentSl, ulong ticket)
 {
    double point  = g_symbolInfo.Point();
    double bid    = g_symbolInfo.Bid();
@@ -204,6 +206,8 @@ void ManagePosition(long posType, double openPrice, double currentSl)
    int    digits = g_symbolInfo.Digits();
 
    if(point <= 0) return;
+   // Race-condition guard: confirm position still exists before any modification
+   if(ticket == 0 || !PositionSelectByTicket(ticket)) return;
 
    if(posType == POSITION_TYPE_BUY)
    {
@@ -213,7 +217,7 @@ void ManagePosition(long posType, double openPrice, double currentSl)
          double targetSl = NormalizeDouble(openPrice + (InpBreakevenLockPts * point), digits);
          if(currentSl < targetSl || currentSl == 0.0)
          {
-            g_trade.PositionModify(_Symbol, targetSl, g_position.TakeProfit());
+            g_trade.PositionModify(ticket, targetSl, g_position.TakeProfit());
             PrintFormat("[M1 Velocity] BUY BREAKEVEN LOCKED: Profit %.1f pts -> SL set to %.5f", profitPoints, targetSl);
          }
       }
@@ -226,7 +230,7 @@ void ManagePosition(long posType, double openPrice, double currentSl)
          double targetSl = NormalizeDouble(openPrice - (InpBreakevenLockPts * point), digits);
          if(currentSl > targetSl || currentSl == 0.0)
          {
-            g_trade.PositionModify(_Symbol, targetSl, g_position.TakeProfit());
+            g_trade.PositionModify(ticket, targetSl, g_position.TakeProfit());
             PrintFormat("[M1 Velocity] SELL BREAKEVEN LOCKED: Profit %.1f pts -> SL set to %.5f", profitPoints, targetSl);
          }
       }
@@ -372,11 +376,12 @@ void OnTick()
    // 1. Position Management & Rapid Breakeven Lock
    double openPrice = 0.0, currentSl = 0.0, currentPnl = 0.0;
    long posType = -1;
-   int activeTrades = GetActivePositionCount(InpMagicNumber, openPrice, currentSl, currentPnl, posType);
+   ulong activeTicket = 0;
+   int activeTrades = GetActivePositionCount(InpMagicNumber, openPrice, currentSl, currentPnl, posType, activeTicket);
 
    if(activeTrades > 0)
    {
-      ManagePosition(posType, openPrice, currentSl);
+      ManagePosition(posType, openPrice, currentSl, activeTicket);
    }
 
    // 2. Risk Guardian Telemetry

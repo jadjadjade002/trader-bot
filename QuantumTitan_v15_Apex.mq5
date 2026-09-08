@@ -602,7 +602,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                double comm   = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
                double fee    = HistoryDealGetDouble(dealTicket, DEAL_FEE);
                double netPnl = profit + swap + comm + fee;
-               PrintFormat("[QuantumTitan v13.00] DEAL CLOSED #%I64u (Magic: %I64u, %s): Net PnL: %s$%.2f (Profit: $%.2f, Swap: $%.2f, Comm: $%.2f)",
+               PrintFormat("[QuantumTitan v15.00] DEAL CLOSED #%I64u (Magic: %I64u, %s): Net PnL: %s$%.2f (Profit: $%.2f, Swap: $%.2f, Comm: $%.2f)",
                   dealTicket, g_actualMagic, g_profile.profileName, (netPnl >= 0 ? "+" : ""), netPnl, profit, swap, comm);
                g_riskGuardian.InvalidateStatsCache();
             }

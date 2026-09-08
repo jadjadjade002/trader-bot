@@ -314,6 +314,8 @@ void CTrailingSafetyEngine::UpdateTrailing(double currentAtr)
          {
             if(bid <= m_positions[idx].virtualSL)
             {
+               // Race-condition guard: re-confirm position still exists before close
+               if(!PositionSelectByTicket(ticket)) { m_positions[idx].pendingCloseTime = now; continue; }
                PrintFormat("[TrailingSafety] HYBRID VIRTUAL SL HIT: Closing BUY #%I64u at Bid %.5f (VirtualSL: %.5f, HardSL: %.5f, Broker StopsLevel: %d pts)",
                   ticket, bid, m_positions[idx].virtualSL, currentSL, (int)stopLevel);
                m_positions[idx].pendingCloseTime = now;
@@ -325,6 +327,8 @@ void CTrailingSafetyEngine::UpdateTrailing(double currentAtr)
          {
             if(ask >= m_positions[idx].virtualSL)
             {
+               // Race-condition guard: re-confirm position still exists before close
+               if(!PositionSelectByTicket(ticket)) { m_positions[idx].pendingCloseTime = now; continue; }
                PrintFormat("[TrailingSafety] HYBRID VIRTUAL SL HIT: Closing SELL #%I64u at Ask %.5f (VirtualSL: %.5f, HardSL: %.5f, Broker StopsLevel: %d pts)",
                   ticket, ask, m_positions[idx].virtualSL, currentSL, (int)stopLevel);
                m_positions[idx].pendingCloseTime = now;
@@ -339,11 +343,15 @@ void CTrailingSafetyEngine::UpdateTrailing(double currentAtr)
       if(currentSL > 0) riskDistance = MathAbs(openPrice - currentSL);
       if(riskDistance <= 0) riskDistance = currentAtr * 1.5; // Default fallback to 1.5 ATR
 
+      // Race-condition guard: re-confirm position still exists before any modify attempt
+      if(!PositionSelectByTicket(ticket)) continue;
+
       // Update Peak Price (Highest high for BUY, Lowest low for SELL)
       if(type == POSITION_TYPE_BUY)
       {
          if(bid > m_positions[idx].peakPrice) m_positions[idx].peakPrice = bid;
          double profitDistance = bid - openPrice;
+
 
          // 1. Breakeven Security (at 0.4R)
          if(!m_positions[idx].breakEvenSecured && profitDistance >= (riskDistance * m_beTriggerR))
