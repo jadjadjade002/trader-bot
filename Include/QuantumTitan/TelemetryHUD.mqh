@@ -166,7 +166,7 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    else if(_Period == PERIOD_M15) profileTag = "M15 SWING";
    else if(_Period == PERIOD_H1) profileTag = "H1 MACRO";
 
-   string hdrStr = StringFormat(">> QUANTUM TITAN v15.00 APEX [%s] <<", profileTag);
+   string hdrStr = StringFormat(">> QUANTUM TITAN v16.00 APEX [%s] <<", profileTag);
    CreateLabel("HDR", startX + 12, startY + 8, hdrStr, clrWhiteSmoke, 9, "Consolas");
    CreateLabel("SEP1", startX + 12, startY + 22, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
@@ -252,7 +252,7 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateLabel("SEP4", startX + 12, startY + 226, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Footer
-   CreateLabel("FOOTER", startX + 12, startY + 238, "Institutional Macro Brain v15.00 APEX", C'110,125,145', 8, "Consolas");
+   CreateLabel("FOOTER", startX + 12, startY + 238, "Institutional Macro Brain v16.00 APEX", C'110,125,145', 8, "Consolas");
 
    ChartRedraw(0);
 }

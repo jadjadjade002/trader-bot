@@ -61,13 +61,13 @@ stops_color=255
 windows_total=1
 
 <expert>
-name=QuantumTitan_v15_Apex
-path=Experts\\QuantumTitan_v15_Apex.ex5
+name=QuantumTitan_v16_Apex
+path=Experts\\QuantumTitan_v16_Apex.ex5
 expertmode=1
 <inputs>
 === 1. ACCOUNT SECURITY & CAPITAL PRESERVATION ====
 InpDemoOnly=true
-InpMagicNumber=991500
+InpMagicNumber=991600
 InpAutoMagicByPeriod=true
 InpMaxAccountLots=0.20
 InpMaxSpreadPoints=65.0
@@ -187,13 +187,13 @@ stops_color=255
 windows_total=1
 
 <expert>
-name=QuantumTitan_v15_Velocity
-path=Experts\\QuantumTitan_v15_Velocity.ex5
+name=QuantumTitan_v16_Velocity
+path=Experts\\QuantumTitan_v16_Velocity.ex5
 expertmode=1
 <inputs>
 === 1. ACCOUNT SECURITY & CAPITAL PRESERVATION ====
 InpDemoOnly=true
-InpMagicNumber=991501
+InpMagicNumber=991601
 InpMaxAccountLots=0.20
 InpMaxSpreadPoints=65.0
 InpMaxDailyLossPct=8.0
