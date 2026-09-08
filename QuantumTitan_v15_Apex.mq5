@@ -234,7 +234,13 @@ int OnInit()
    if(g_handleEma50 != INVALID_HANDLE) ChartIndicatorAdd(0, 0, g_handleEma50);
    if(g_handleEma200 != INVALID_HANDLE) ChartIndicatorAdd(0, 0, g_handleEma200);
 
-   // 5. Initialize Module 1: Alpha Scoring Engine (vs Cryptohopper)
+   // STRICT LOT CONTROL: Micro capital preservation - force 0.01 lot exclusively
+   if(InpBaseLot != 0.01)
+   {
+      PrintFormat("[Safety Override] InpBaseLot %.2f adjusted to strict 0.01 lot.", InpBaseLot);
+   }
+
+   // 5. Initialize Module 1: Alpha Scoring Engine
    if(!g_alphaEngine.Init(_Symbol, _Period, g_effectiveHtf))
    {
       Print("❌ Failed to initialize Module 1: Alpha Scoring Engine");
@@ -532,11 +538,12 @@ void OnTick()
       double sl = NormalizeDouble(ask - slDist, digits);
       double tp = NormalizeDouble(ask + tpDist, digits);
 
-      if(g_trade.Buy(InpBaseLot, _Symbol, ask, sl, tp, "QuantumTitan_Alpha_Buy"))
+      const double strictLot = 0.01;
+      if(g_trade.Buy(strictLot, _Symbol, ask, sl, tp, "QuantumTitan_Alpha_Buy"))
       {
          orderFilled = true;
          g_hud.DispatchAlert("ALPHA BUY ENTRY", StringFormat("[%s] Score: %d/100 | Regime: %s | SL: %.5f | TP: %.5f (Target: $%.2f)",
-            g_profile.profileName, alphaTelem.totalScoreBuy, alphaTelem.regimeName, sl, tp, (tp - ask) * (InpBaseLot * pointVal / point)));
+            g_profile.profileName, alphaTelem.totalScoreBuy, alphaTelem.regimeName, sl, tp, (tp - ask) * (strictLot * pointVal / point)));
          g_hud.DrawTradeArrow("BUY_" + IntegerToString((int)TimeCurrent()), TimeCurrent(), ask, true);
       }
       else
@@ -551,11 +558,12 @@ void OnTick()
       double sl = NormalizeDouble(bid + slDist, digits);
       double tp = NormalizeDouble(bid - tpDist, digits);
 
-      if(g_trade.Sell(InpBaseLot, _Symbol, bid, sl, tp, "QuantumTitan_Alpha_Sell"))
+      const double strictLot = 0.01;
+      if(g_trade.Sell(strictLot, _Symbol, bid, sl, tp, "QuantumTitan_Alpha_Sell"))
       {
          orderFilled = true;
          g_hud.DispatchAlert("ALPHA SELL ENTRY", StringFormat("[%s] Score: %d/100 | Regime: %s | SL: %.5f | TP: %.5f (Target: $%.2f)",
-            g_profile.profileName, alphaTelem.totalScoreSell, alphaTelem.regimeName, sl, tp, (bid - tp) * (InpBaseLot * pointVal / point)));
+            g_profile.profileName, alphaTelem.totalScoreSell, alphaTelem.regimeName, sl, tp, (bid - tp) * (strictLot * pointVal / point)));
          g_hud.DrawTradeArrow("SELL_" + IntegerToString((int)TimeCurrent()), TimeCurrent(), bid, false);
       }
       else

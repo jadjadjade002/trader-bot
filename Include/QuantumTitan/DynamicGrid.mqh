@@ -278,27 +278,9 @@ double CDynamicGridEngine::CalculateGridLot(int orderIndex)
    if(step <= 0) step = 0.01;
    if(minLot <= 0) minLot = 0.01;
 
-   double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
-
-   // MICRO ACCOUNT (<$100) MANDATORY PROTECTION:
-   // On small accounts ($50), any lot escalation causes fatal margin lockout (exhausting the 60% reserve)
-   // and turns normal market breathing into catastrophic drawdown.
-   // All grid layers are strictly locked to minLot (0.01 flat) to guarantee free margin > 70%.
-   if(currentEquity <= 100.0)
-   {
-      return NormalizeLot(minLot);
-   }
-
-   // Standard Account: Geometric with Arithmetic Fallback
-   double rawLot = m_baseLot * MathPow(m_lotMultiplier, orderIndex);
-   double lot = MathRound(rawLot / step) * step;
-
-   if(orderIndex >= 1 && lot <= m_baseLot)
-   {
-      lot = m_baseLot + (step * orderIndex);
-   }
-
-   return NormalizeLot(lot);
+   // HARD CAPITAL PRESERVATION: Strictly lock every grid layer to 0.01 lot (minLot)
+   // Prevents margin exhaustion, prevents broker lot rejection, and guarantees safe drawdown on micro accounts.
+   return NormalizeLot(minLot > 0.0 ? minLot : 0.01);
 }
 
 //+------------------------------------------------------------------+

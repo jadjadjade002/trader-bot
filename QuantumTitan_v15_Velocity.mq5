@@ -481,17 +481,18 @@ void OnTick()
       }
    }
 
-   // Execute Scalp Order
+   // Execute Scalp Order (Strict 0.01 Lot Guaranteed)
+   const double strictLot = 0.01;
    if(signalBuy)
    {
       double sl = NormalizeDouble(ask - (InpStopLossPoints * point), digits);
       double tp = NormalizeDouble(ask + (InpTakeProfitPoints * point), digits);
 
-      if(g_trade.Buy(InpBaseLot, _Symbol, ask, sl, tp, "QT15_Velocity_Buy"))
+      if(g_trade.Buy(strictLot, _Symbol, ask, sl, tp, "QT15_Velocity_Buy"))
       {
          g_lastBarTime = currentBarTime;
-         PrintFormat("⚡ [M1 Velocity] BUY SCALP OPENED @ %.5f | SL: %.5f (-%.0f pts) | TP: %.5f (+%.0f pts)",
-            ask, sl, InpStopLossPoints, tp, InpTakeProfitPoints);
+         PrintFormat("⚡ [M1 Velocity] BUY SCALP OPENED @ %.5f | SL: %.5f (-%.0f pts) | TP: %.5f (+%.0f pts) | Lot: %.2f",
+            ask, sl, InpStopLossPoints, tp, InpTakeProfitPoints, strictLot);
       }
    }
    else if(signalSell)
@@ -499,11 +500,11 @@ void OnTick()
       double sl = NormalizeDouble(bid + (InpStopLossPoints * point), digits);
       double tp = NormalizeDouble(bid - (InpTakeProfitPoints * point), digits);
 
-      if(g_trade.Sell(InpBaseLot, _Symbol, bid, sl, tp, "QT15_Velocity_Sell"))
+      if(g_trade.Sell(strictLot, _Symbol, bid, sl, tp, "QT15_Velocity_Sell"))
       {
          g_lastBarTime = currentBarTime;
-         PrintFormat("⚡ [M1 Velocity] SELL SCALP OPENED @ %.5f | SL: %.5f (-%.0f pts) | TP: %.5f (+%.0f pts)",
-            bid, sl, InpStopLossPoints, tp, InpTakeProfitPoints);
+         PrintFormat("⚡ [M1 Velocity] SELL SCALP OPENED @ %.5f | SL: %.5f (-%.0f pts) | TP: %.5f (+%.0f pts) | Lot: %.2f",
+            bid, sl, InpStopLossPoints, tp, InpTakeProfitPoints, strictLot);
       }
    }
 
