@@ -58,6 +58,7 @@ private:
    double               m_lotMultiplier;        // Geometric lot multiplier (Default 1.25)
    double               m_minMarginReservePct;  // Minimum Free Margin % to allow new orders (Default 60.0%)
    double               m_basketTpAtrMult;      // Target ATR profit for basket close (Default 0.8)
+   double               m_maxSpreadPoints;      // Max allowed spread for grid layer placement (Default 65.0)
 
    // Pending Grid Layer Anchors (prevents geometric grid distortion on execution retries)
    bool                 m_pendingBuyActive;
@@ -81,7 +82,7 @@ public:
 
    bool                 Init(string symbol, ulong magic, double baseLot = 0.01, int maxOrders = 4,
                              double stepAtrMult = 1.0, double lotMult = 1.25, double minMarginPct = 60.0,
-                             double basketTpAtrMult = 0.8);
+                             double basketTpAtrMult = 0.8, double maxSpread = 65.0);
 
    // Core Evaluation & Execution
    bool                 EvaluateGridStep(double currentAtr, bool allowBuy, bool allowSell);
@@ -106,6 +107,7 @@ CDynamicGridEngine::CDynamicGridEngine()
      m_lotMultiplier(1.25),
      m_minMarginReservePct(60.0),
      m_basketTpAtrMult(0.8),
+     m_maxSpreadPoints(65.0),
      m_pendingBuyActive(false),
      m_pendingBuyAnchorPrice(0.0),
      m_pendingBuyLayerIndex(0),
@@ -128,7 +130,7 @@ CDynamicGridEngine::~CDynamicGridEngine()
 //+------------------------------------------------------------------+
 bool CDynamicGridEngine::Init(string symbol, ulong magic, double baseLot, int maxOrders,
                              double stepAtrMult, double lotMult, double minMarginPct,
-                             double basketTpAtrMult)
+                             double basketTpAtrMult, double maxSpread)
 {
    m_symbol = (symbol == "") ? _Symbol : symbol;
    m_magic = magic;
@@ -138,6 +140,7 @@ bool CDynamicGridEngine::Init(string symbol, ulong magic, double baseLot, int ma
    m_lotMultiplier = lotMult;
    m_minMarginReservePct = minMarginPct;
    m_basketTpAtrMult = basketTpAtrMult;
+   m_maxSpreadPoints = maxSpread;
    m_pendingBuyActive = false;
    m_pendingBuyAnchorPrice = 0.0;
    m_pendingBuyLayerIndex = 0;
@@ -320,9 +323,9 @@ bool CDynamicGridEngine::EvaluateGridStep(double currentAtr, bool allowBuy, bool
    double bid   = m_symbolInfo.Bid();
    double ask   = m_symbolInfo.Ask();
 
-   // Spread Guard: Never add grid layers when spread is excessive (> 25 points)
+   // Spread Guard: Never add grid layers when spread is excessive
    double spreadPts = (point > 0.0) ? (ask - bid) / point : 0.0;
-   if(spreadPts > 25.0) return false;
+   if(spreadPts > m_maxSpreadPoints) return false;
 
    double midPrice = (bid + ask) / 2.0;
 
@@ -578,33 +581,19 @@ bool CDynamicGridEngine::CheckAndCloseBasket(double currentAtr)
       }
    }
 
-   // 3. Emergency Protection on Micro Accounts (Equity <= $100)
+   // 3. Emergency Basket Protection on Micro Accounts (Equity <= $100)
    double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
    if(currentEquity <= 100.0)
    {
-      // Single order protection: prevent lone position bleeding out (Max $3.00 loss = 6% risk)
-      if(buyCount == 1 && m_telemetry.totalBuyProfit <= -3.00)
-      {
-         PrintFormat("[DynamicGrid] EMERGENCY DEFENSIVE CUT: 1 BUY order hit -$%.2f risk cap", MathAbs(m_telemetry.totalBuyProfit));
-         CloseAllGridOrders(POSITION_TYPE_BUY);
-         closedAny = true;
-      }
-      if(sellCount == 1 && m_telemetry.totalSellProfit <= -3.00)
-      {
-         PrintFormat("[DynamicGrid] EMERGENCY DEFENSIVE CUT: 1 SELL order hit -$%.2f risk cap", MathAbs(m_telemetry.totalSellProfit));
-         CloseAllGridOrders(POSITION_TYPE_SELL);
-         closedAny = true;
-      }
-
-      // Basket protection (Max $10.00 loss = 20% risk)
-      if(buyCount >= 2 && m_telemetry.totalBuyProfit <= -10.0)
+      // Basket protection (Max $8.00 loss = ~15% risk cap for multi-layer basket)
+      if(buyCount >= 2 && m_telemetry.totalBuyProfit <= -8.0)
       {
          PrintFormat("[DynamicGrid] EMERGENCY BASKET CUT: Closing %d BUY orders at -$%.2f loss to protect capital",
             buyCount, MathAbs(m_telemetry.totalBuyProfit));
          CloseAllGridOrders(POSITION_TYPE_BUY);
          closedAny = true;
       }
-      if(sellCount >= 2 && m_telemetry.totalSellProfit <= -10.0)
+      if(sellCount >= 2 && m_telemetry.totalSellProfit <= -8.0)
       {
          PrintFormat("[DynamicGrid] EMERGENCY BASKET CUT: Closing %d SELL orders at -$%.2f loss to protect capital",
             sellCount, MathAbs(m_telemetry.totalSellProfit));

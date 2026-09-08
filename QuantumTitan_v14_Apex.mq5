@@ -45,7 +45,7 @@ input bool     InpDemoOnly             = true;       // Lock EA to DEMO Account 
 input ulong    InpMagicNumber          = 991400;     // Base Magic Number (v14 Apex ID)
 input bool     InpAutoMagicByPeriod    = true;       // Auto-Derive Magic by Timeframe (M1/M5/M15/H1 safe isolation)
 input double   InpMaxAccountLots       = 0.20;       // Max Total Open Lots on Account (Shared Risk Cap across 4 charts)
-input double   InpMaxSpreadPoints      = 45.0;       // Max Allowed Spread (Points)
+input double   InpMaxSpreadPoints      = 65.0;       // Max Allowed Spread (Points - Safe for Gold Volatility)
 input double   InpMaxDailyLossPct      = 8.0;        // Daily Loss Kill-Switch (%)
 input double   InpHardEquityFloor      = 30.0;       // Hard Equity Floor ($) - Stop All Trading
 input int      InpMaxTradesPerDay      = 16;         // Maximum Completed Trades Per Day
@@ -243,7 +243,8 @@ int OnInit()
 
    // 7. Initialize Module 3: ATR Geometric Grid Engine (Configured to Timeframe Profile)
    if(!g_gridEngine.Init(_Symbol, g_actualMagic, InpBaseLot, InpMaxGridOrdersPerSide,
-                         g_profile.gridStepMultiplier, InpLotMultiplier, InpMinMarginReservePct, g_profile.basketTpAtrMult))
+                         g_profile.gridStepMultiplier, InpLotMultiplier, InpMinMarginReservePct, g_profile.basketTpAtrMult,
+                         InpMaxSpreadPoints))
    {
       Print("❌ Failed to initialize Module 3: Dynamic Grid Engine");
       return INIT_FAILED;
@@ -450,7 +451,7 @@ void OnTick()
 
    // DYNAMIC RISK BUDGETING: Adaptive SL and TP tailored to Timeframe Profile
    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
-   double maxRiskDollars = (equity <= 100.0) ? 3.50 : (equity * 0.02);
+   double maxRiskDollars = (equity <= 100.0) ? MathMax(4.50, equity * 0.08) : (equity * 0.02);
    double tickVal = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
    double tickSz  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    double pointVal = (tickSz > 0) ? (tickVal / tickSz) * point : 1.0;
