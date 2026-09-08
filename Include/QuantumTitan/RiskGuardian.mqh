@@ -170,9 +170,10 @@ bool CRiskGuardian::Init(string symbol, ulong magic, double maxDDPct, double har
    string safeSymbol = m_symbol;
    StringReplace(safeSymbol, "/", "_");
    StringReplace(safeSymbol, ".", "_");
-   m_gvHwm = StringFormat("QT_%I64u_%s_HWM", m_magic, safeSymbol);
-   m_gvDay = StringFormat("QT_%I64u_%s_DAY", m_magic, safeSymbol);
-   m_gvCB  = StringFormat("QT_%I64u_%s_CB", m_magic, safeSymbol);
+   long login = AccountInfoInteger(ACCOUNT_LOGIN);
+   m_gvHwm = StringFormat("QT_%I64d_%I64u_%s_HWM", login, m_magic, safeSymbol);
+   m_gvDay = StringFormat("QT_%I64d_%I64u_%s_DAY", login, m_magic, safeSymbol);
+   m_gvCB  = StringFormat("QT_%I64d_%I64u_%s_CB", login, m_magic, safeSymbol);
 
    if(GlobalVariableCheck(m_gvDay) && (datetime)GlobalVariableGet(m_gvDay) == m_currentDay)
    {
