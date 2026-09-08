@@ -2,7 +2,7 @@ import os
 
 CHARTS_DIR = '/home/ubuntu/.wine/drive_c/Program Files/MetaTrader 5/MQL5/Profiles/Charts/Default'
 
-TEMPLATE_V14 = """<chart>
+TEMPLATE_APEX = """<chart>
 id={id}
 symbol=XAUUSD
 description=Gold vs US Dollar
@@ -61,13 +61,13 @@ stops_color=255
 windows_total=1
 
 <expert>
-name=QuantumTitan_v14_Apex
-path=Experts\\QuantumTitan_v14_Apex.ex5
+name=QuantumTitan_v15_Apex
+path=Experts\\QuantumTitan_v15_Apex.ex5
 expertmode=1
 <inputs>
 === 1. ACCOUNT SECURITY & CAPITAL PRESERVATION ====
 InpDemoOnly=true
-InpMagicNumber=991400
+InpMagicNumber=991500
 InpAutoMagicByPeriod=true
 InpMaxAccountLots=0.20
 InpMaxSpreadPoints=65.0
@@ -128,7 +128,7 @@ fixed_height=-1
 </chart>
 """
 
-TEMPLATE_V15 = """<chart>
+TEMPLATE_VELOCITY = """<chart>
 id={id}
 symbol=XAUUSD
 description=Gold vs US Dollar
@@ -250,25 +250,25 @@ fixed_height=-1
 """
 
 charts = [
-    # Chart 1: M1 Apex — top-left
+    # Chart 1: M1 Apex v15 — top-left
     {"name": "chart01.chr", "id": 5001001, "period_type": 0, "period_size": 1,
-     "w_left": 0, "w_top": 0, "w_right": 960, "w_bottom": 540, "template": "v14"},
-    # Chart 2: M1 Velocity (NEW) — bottom-left
+     "w_left": 0, "w_top": 0, "w_right": 960, "w_bottom": 365, "template": "apex"},
+    # Chart 2: M1 Velocity v15 (NEW) — bottom-left
     {"name": "chart02.chr", "id": 5001002, "period_type": 0, "period_size": 1,
-     "w_left": 0, "w_top": 540, "w_right": 960, "w_bottom": 1080, "template": "v15"},
-    # Chart 3: M5 Apex — top-right
+     "w_left": 0, "w_top": 365, "w_right": 960, "w_bottom": 730, "template": "velocity"},
+    # Chart 3: M5 Apex v15 — top-right
     {"name": "chart03.chr", "id": 5001005, "period_type": 0, "period_size": 5,
-     "w_left": 960, "w_top": 0, "w_right": 1920, "w_bottom": 360, "template": "v14"},
-    # Chart 4: M15 Apex — mid-right
+     "w_left": 960, "w_top": 0, "w_right": 1920, "w_bottom": 243, "template": "apex"},
+    # Chart 4: M15 Apex v15 — mid-right
     {"name": "chart04.chr", "id": 5001015, "period_type": 0, "period_size": 15,
-     "w_left": 960, "w_top": 360, "w_right": 1920, "w_bottom": 720, "template": "v14"},
-    # Chart 5: H1 Apex — bottom-right
+     "w_left": 960, "w_top": 243, "w_right": 1920, "w_bottom": 486, "template": "apex"},
+    # Chart 5: H1 Apex v15 — bottom-right
     {"name": "chart05.chr", "id": 5001060, "period_type": 1, "period_size": 1,
-     "w_left": 960, "w_top": 720, "w_right": 1920, "w_bottom": 1080, "template": "v14"},
+     "w_left": 960, "w_top": 486, "w_right": 1920, "w_bottom": 730, "template": "apex"},
 ]
 
 for c in charts:
-    tmpl = TEMPLATE_V15 if c["template"] == "v15" else TEMPLATE_V14
+    tmpl = TEMPLATE_VELOCITY if c["template"] == "velocity" else TEMPLATE_APEX
     content = tmpl.format(**c)
     filepath = os.path.join(CHARTS_DIR, c["name"])
     with open(filepath, "w", encoding="utf-16le") as f:
@@ -280,4 +280,4 @@ order_path = os.path.join(CHARTS_DIR, "order.wnd")
 with open(order_path, "w", encoding="utf-16le") as f:
     f.write("\ufeff" + order_content)
 
-print("Generated order.wnd with 5 charts (M1 Apex, M1 Velocity, M5, M15, H1) successfully!")
+print("Generated order.wnd with 5 charts (M1 Apex v15, M1 Velocity v15, M5 v15, M15 v15, H1 v15) successfully!")
