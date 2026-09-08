@@ -323,6 +323,11 @@ int OnInit()
       return INIT_FAILED;
    }
 
+   // Attach visual indicator lines to chart
+   ChartIndicatorAdd(0, 0, g_handleEmaFast);
+   ChartIndicatorAdd(0, 0, g_handleEmaSlow);
+   ChartIndicatorAdd(0, 0, g_handleBands);
+
    // Initialize Risk Guardian
    if(!g_riskGuardian.Init(_Symbol, InpMagicNumber, InpMaxDailyLossPct, InpHardEquityFloor,
                            InpMaxTradesPerDay, InpMaxLosingStreak, InpMaxSpreadPoints,
@@ -389,6 +394,18 @@ void OnTick()
 
    // 4. Render HUD
    RenderHUD(sqz, fastEma[0], slowEma[0], activeTrades, currentPnl);
+
+   // Draw dynamic EMA14 Retest Level Line
+   string retestObj = "QT15_RETEST_LINE";
+   if(fastEma[0] > 0)
+   {
+      if(ObjectFind(0, retestObj) < 0) ObjectCreate(0, retestObj, OBJ_HLINE, 0, 0, fastEma[0]);
+      else ObjectMove(0, retestObj, 0, 0, fastEma[0]);
+      ObjectSetInteger(0, retestObj, OBJPROP_COLOR, (fastEma[0] > slowEma[0]) ? clrGold : clrDeepPink);
+      ObjectSetInteger(0, retestObj, OBJPROP_STYLE, STYLE_DOT);
+      ObjectSetInteger(0, retestObj, OBJPROP_WIDTH, 1);
+      ObjectSetString(0, retestObj, OBJPROP_TOOLTIP, "EMA14 Retest Trigger Line");
+   }
 
    // 5. Entry Checks
    // Only open new scalp if no active position for this EA

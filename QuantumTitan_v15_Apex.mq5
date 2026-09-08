@@ -101,6 +101,8 @@ ENUM_TIMEFRAMES        g_effectiveHtf = PERIOD_H1;
 datetime               g_lastBarTime = 0;
 int                    g_handleAtrCurrent = INVALID_HANDLE;
 int                    g_handleAtrHTF     = INVALID_HANDLE;
+int                    g_handleEma50      = INVALID_HANDLE;
+int                    g_handleEma200     = INVALID_HANDLE;
 
 //+------------------------------------------------------------------+
 //| Adaptive Higher Timeframe Resolution                             |
@@ -216,15 +218,21 @@ int OnInit()
    else
       g_trade.SetTypeFilling(ORDER_FILLING_RETURN);
 
-   // 4. Dual ATR Indicator Handles: Current Timeframe & Higher Timeframe
+   // 4. Indicator Handles: ATR & Visual EMAs
    g_handleAtrCurrent = iATR(_Symbol, _Period, 14);
    g_handleAtrHTF     = iATR(_Symbol, g_effectiveHtf, 14);
+   g_handleEma50      = iMA(_Symbol, _Period, 50, 0, MODE_EMA, PRICE_CLOSE);
+   g_handleEma200     = iMA(_Symbol, _Period, 200, 0, MODE_EMA, PRICE_CLOSE);
 
    if(g_handleAtrCurrent == INVALID_HANDLE || g_handleAtrHTF == INVALID_HANDLE)
    {
       Print("❌ Failed to create dual ATR handles");
       return INIT_FAILED;
    }
+
+   // Attach visual moving averages to chart (EMA 50 & EMA 200)
+   if(g_handleEma50 != INVALID_HANDLE) ChartIndicatorAdd(0, 0, g_handleEma50);
+   if(g_handleEma200 != INVALID_HANDLE) ChartIndicatorAdd(0, 0, g_handleEma200);
 
    // 5. Initialize Module 1: Alpha Scoring Engine (vs Cryptohopper)
    if(!g_alphaEngine.Init(_Symbol, _Period, g_effectiveHtf))
@@ -325,6 +333,17 @@ void OnDeinit(const int reason)
       IndicatorRelease(g_handleAtrHTF);
       g_handleAtrHTF = INVALID_HANDLE;
    }
+   if(g_handleEma50 != INVALID_HANDLE)
+   {
+      IndicatorRelease(g_handleEma50);
+      g_handleEma50 = INVALID_HANDLE;
+   }
+   if(g_handleEma200 != INVALID_HANDLE)
+   {
+      IndicatorRelease(g_handleEma200);
+      g_handleEma200 = INVALID_HANDLE;
+   }
+   ObjectsDeleteAll(0, "QT15_");
    g_alphaEngine.Deinit();
    g_hud.Deinit();
    Comment("");
@@ -403,6 +422,48 @@ void OnTick()
          alphaTelem.dailyBias,
          alphaTelem.killzone
       );
+   }
+
+   // Dynamic On-Chart Line Indicators (Equilibrium & Basket Average)
+   MqlRates htfRates[];
+   ArraySetAsSeries(htfRates, true);
+   ENUM_TIMEFRAMES rangeTf = (_Period == PERIOD_M1) ? PERIOD_M1 : g_effectiveHtf;
+   int copiedRates = CopyRates(_Symbol, rangeTf, 0, 40, htfRates);
+   if(copiedRates >= 15)
+   {
+      double htfHigh = htfRates[0].high, htfLow = htfRates[0].low;
+      for(int r = 1; r < copiedRates; r++)
+      {
+         if(htfRates[r].high > htfHigh) htfHigh = htfRates[r].high;
+         if(htfRates[r].low < htfLow)   htfLow  = htfRates[r].low;
+      }
+      double eqPrice = (htfHigh + htfLow) / 2.0;
+
+      // 50% Macro Valuation Equilibrium Line (Orange Dashed)
+      string eqObj = "QT15_MACRO_EQ";
+      if(ObjectFind(0, eqObj) < 0) ObjectCreate(0, eqObj, OBJ_HLINE, 0, 0, eqPrice);
+      else ObjectMove(0, eqObj, 0, 0, eqPrice);
+      ObjectSetInteger(0, eqObj, OBJPROP_COLOR, clrDarkOrange);
+      ObjectSetInteger(0, eqObj, OBJPROP_STYLE, STYLE_DASHDOT);
+      ObjectSetInteger(0, eqObj, OBJPROP_WIDTH, 1);
+      ObjectSetString(0, eqObj, OBJPROP_TOOLTIP, "50% Macro Equilibrium (Discount / Premium Divider)");
+   }
+
+   // Active Basket Average Entry Line (Cyan Solid)
+   string avgPriceObj = "QT15_BASKET_AVG";
+   double avgPrice = (gridTelem.buyOrderCount > 0) ? gridTelem.avgBuyPrice : gridTelem.avgSellPrice;
+   if(avgPrice > 0)
+   {
+      if(ObjectFind(0, avgPriceObj) < 0) ObjectCreate(0, avgPriceObj, OBJ_HLINE, 0, 0, avgPrice);
+      else ObjectMove(0, avgPriceObj, 0, 0, avgPrice);
+      ObjectSetInteger(0, avgPriceObj, OBJPROP_COLOR, clrAqua);
+      ObjectSetInteger(0, avgPriceObj, OBJPROP_STYLE, STYLE_SOLID);
+      ObjectSetInteger(0, avgPriceObj, OBJPROP_WIDTH, 2);
+      ObjectSetString(0, avgPriceObj, OBJPROP_TOOLTIP, "Active Basket Average Entry Price");
+   }
+   else
+   {
+      ObjectDelete(0, avgPriceObj);
    }
 
    // 7. STEP 4: Active Basket Grid Layer Placement (if in active position)
