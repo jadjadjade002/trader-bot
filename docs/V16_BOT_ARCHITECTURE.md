@@ -1,5 +1,7 @@
 # QuantumTitan V16 Bot Architecture
 
+**English** | [ภาษาไทย](V16_BOT_ARCHITECTURE_TH.md)
+
 This document explains how the V16 bot is structured and how the currently running VM instance behaves.
 
 ## Running Instance
