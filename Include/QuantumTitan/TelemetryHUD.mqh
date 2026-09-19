@@ -33,13 +33,11 @@ public:
    bool           Init(string symbol, bool enabled = true, bool sendPush = true, bool sendPop = true);
    void           Deinit();
 
-   // Core Rendering
-   void           RenderHUD(string regimeStr, int buyScore, int sellScore,
-                            int buyOrders, double buyLots, int sellOrders, double sellLots,
-                            double floatingPnl, double dailyHWM, double dailyDDPct,
-                            double freeMarginPct, string newsStatus, bool isTradingPermitted,
-                            string statusReason,
-                            string macroZone = "EQUILIBRIUM", string dailyBias = "NEUTRAL", string killzone = "ACTIVE");
+    // Core Rendering
+    void           RenderHUD(string regimeStr, int buyScore, int sellScore,
+                             int buyOrders, double buyLots, int sellOrders, double sellLots,
+                             double floatingPnl, double freeMarginPct,
+                             string macroZone = "EQUILIBRIUM", string dailyBias = "NEUTRAL", string killzone = "ACTIVE");
 
    // Visual Trade Markers
    void           DrawOrderBlock(string name, datetime t1, double p1, datetime t2, double p2, color boxColor);
@@ -141,11 +139,9 @@ void CTelemetryHUD::CreateCard(string name, int x, int y, int width, int height,
 //| Render Real-Time Visual Matrix HUD                               |
 //+------------------------------------------------------------------+
 void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
-                              int buyOrders, double buyLots, int sellOrders, double sellLots,
-                              double floatingPnl, double dailyHWM, double dailyDDPct,
-                              double freeMarginPct, string newsStatus, bool isTradingPermitted,
-                              string statusReason,
-                              string macroZone, string dailyBias, string killzone)
+                               int buyOrders, double buyLots, int sellOrders, double sellLots,
+                               double floatingPnl, double freeMarginPct,
+                               string macroZone, string dailyBias, string killzone)
 {
    if(!m_enabled) return;
 
@@ -170,14 +166,12 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateLabel("HDR", startX + 12, startY + 8, hdrStr, clrWhiteSmoke, 9, "Consolas");
    CreateLabel("SEP1", startX + 12, startY + 22, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
-   // Section 1: Account Security & News
+    // Section 1: Account & execution
    string accMode = (AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_DEMO) ? "DEMO (Safe)" : "REAL (Live)";
    string accStr  = StringFormat("Account Mode   : %s ($%.2f)", accMode, AccountInfoDouble(ACCOUNT_EQUITY));
    CreateLabel("ACC", startX + 12, startY + 35, accStr, C'175,185,200', 8, "Consolas");
 
-   string newsStr = (newsStatus == "" || newsStatus == "CLEAR") ? "News Calendar  : CLEAR [NO IMPACT]" : "News Calendar  : " + newsStatus;
-   color newsClr = (newsStatus == "" || newsStatus == "CLEAR") ? clrMediumSpringGreen : clrYellow;
-   CreateLabel("NEWS", startX + 12, startY + 48, newsStr, newsClr, 8, "Consolas");
+    CreateLabel("NEWS", startX + 12, startY + 48, "Execution Mode : AUTOMATED", clrMediumSpringGreen, 8, "Consolas");
 
    long currentSpread = SymbolInfoInteger(m_symbol, SYMBOL_SPREAD);
    string spreadStr = StringFormat("Spread Check   : %d pts", currentSpread);
@@ -211,8 +205,8 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateLabel("EXPOSURE", startX + 12, startY + 137, posStr, C'165,175,190', 8, "Consolas");
 
    color pnlClr = (floatingPnl >= 0) ? C'38,166,154' : C'239,83,80';
-   string pnlStr = StringFormat("Floating PnL   : %s$%.2f | DD: %.1f%% (HWM: $%.0f)",
-      (floatingPnl >= 0 ? "+" : ""), floatingPnl, dailyDDPct, dailyHWM);
+    string pnlStr = StringFormat("Floating PnL   : %s$%.2f",
+       (floatingPnl >= 0 ? "+" : ""), floatingPnl);
    CreateLabel("PNL", startX + 12, startY + 150, pnlStr, pnlClr, 8, "Consolas");
 
    color marginClr = (freeMarginPct >= 60.0) ? C'38,166,154' : clrDarkOrange;
@@ -223,8 +217,8 @@ void CTelemetryHUD::RenderHUD(string regimeStr, int buyScore, int sellScore,
    CreateLabel("SEP3", startX + 12, startY + 175, "--------------------------------------------------", C'48,56,74', 8, "Consolas");
 
    // Section 3: Status & Execution
-   string statusBadge = isTradingPermitted ? "ACTIVE [HUNTING SETUP]" : "PAUSED [" + statusReason + "]";
-   color statusColor = isTradingPermitted ? C'38,166,154' : C'239,83,80';
+    string statusBadge = "ACTIVE [HUNTING SETUP]";
+    color statusColor = C'38,166,154';
    CreateLabel("STATUS", startX + 12, startY + 188, "Status         : " + statusBadge, statusColor, 8, "Consolas");
 
    string activeStr = (buyOrders > 0 || sellOrders > 0) ? "Active Trades  : [IN POSITION]" : "Active Trades  : [SCANNING MARKET]";

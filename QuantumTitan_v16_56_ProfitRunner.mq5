@@ -1,15 +1,15 @@
 //+------------------------------------------------------------------+
-//|                                   QuantumTitan_v16_Velocity.mq5 |
-//|          v16.55 Institutional High-Frequency Scalper Framework   |
+//|                           QuantumTitan_v16_56_ProfitRunner.mq5 |
+//|          v16.56 ProfitRunner M1 Scalper Candidate                |
 //|      Multi-Agent Autonomous Trading System: Top 1% Standard      |
 //|      Trend-Locked SMC Sweeps, Anti-Revenge Cooldown,             |
 //|      Volatility Shock Ceiling, Dynamic ATR Targets               |
 //|                    Chief Engineer: Gemini Quantum                |
 //+------------------------------------------------------------------+
-#property copyright "QuantumTitan Institutional Quant Framework v16.55 Velocity"
+#property copyright "QuantumTitan Institutional Quant Framework v16.56 ProfitRunner"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "16.55"
-#property description "v16.55 Institutional M1 Scalper: Trend-Locked SMC Sweeps, Anti-Revenge Loss Choke, Volatility Shock Ceiling, Dynamic ATR Engine"
+#property version   "16.56"
+#property description "v16.56 candidate: v16.55 entry and first BE, plus staged ATR profit locks"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -21,7 +21,7 @@
 input group "=== 1. ACCOUNT SECURITY & EXECUTION ==="
 input bool     InpDemoOnly             = true;       // Lock EA to DEMO Account Only
 input ulong    InpTargetAccount        = 0;          // Authorized Target Demo Account (0 = Any Demo)
-input ulong    InpMagicNumber          = 991602;     // Dedicated Velocity ID
+input ulong    InpMagicNumber          = 991656;     // Dedicated ProfitRunner candidate ID
 input double   InpMaxSpreadPoints      = 60.0;       // Max Allowed Spread (Points - Gold Volatility Safe)
 
 input group "=== 2. MQL5 NATIVE ECONOMIC NEWS INTELLIGENCE ==="
@@ -52,15 +52,24 @@ input double   InpKCMult               = 1.5;        // Keltner Channel ATR Mult
 input group "=== 6. DYNAMIC VOLATILITY REGIME & ATR TARGETS ==="
 input bool     InpUseDynamicAtr        = true;       // Adaptive ATR Volatility Scaling (vs Static Points)
 input double   InpAtrSlMult            = 1.5;        // Stop Loss (ATR Multiplier)
-input double   InpAtrTpMult            = 2.0;        // Take Profit (ATR Multiplier -> 1.33:1 R:R)
-input double   InpAtrBeTriggerMult     = 0.8;        // Breakeven Activation (ATR Multiplier)
-input double   InpAtrBeLockMult        = 0.2;        // Breakeven Lock Buffer (ATR Multiplier)
+input double   InpAtrTpMult            = 2.0;        // Preserve v16.55 TP behavior
+input double   InpAtrBeTriggerMult     = 0.8;        // Preserve v16.55 first protection trigger
+input double   InpAtrBeLockMult        = 0.2;        // Preserve v16.55 first protection lock
+input double   InpMinBeTriggerPts      = 75.0;
+input double   InpMaxBeTriggerPts      = 150.0;
+input double   InpMinBeLockPts         = 20.0;
+input double   InpMaxBeLockPts         = 50.0;
+input bool     InpEnableStagedProfitLock = false;    // Experimental; baseline-equivalent exit by default
+input double   InpStage2TriggerAtr     = 1.20;       // Strong move: advance lock materially
+input double   InpStage2LockAtr        = 0.55;
+input double   InpStage3TriggerAtr     = 1.65;       // Exceptional move: protect roughly 1R
+input double   InpStage3LockAtr        = 1.00;
 input double   InpMinAtrPoints         = 50.0;       // Dead Market Filter (Min ATR Points: $0.50)
 input double   InpMaxAllowedAtrPoints  = 650.0;      // Extreme Volatility Shock Ceiling (Max ATR Points: $6.50)
-input double   InpTakeProfitPoints     = 220.0;      // Fallback Static Take Profit (Points: +$2.20)
+input double   InpTakeProfitPoints     = 220.0;      // Preserve v16.55 fallback TP
 input double   InpStopLossPoints       = 180.0;      // Fallback Static Stop Loss (Points: -$1.80)
-input double   InpBreakevenTriggerPts  = 75.0;       // Fallback Static BE Trigger (Points: +$0.75)
-input double   InpBreakevenLockPts     = 20.0;       // Fallback Static BE Lock (Points: +$0.20)
+input double   InpBreakevenTriggerPts  = 75.0;
+input double   InpBreakevenLockPts     = 20.0;
 input int      InpCooldownBars         = 2;          // Full M1 bars to wait after position closes
 input int      InpLossStreakPauseMins  = 15;         // Anti-Revenge Pause (Mins) after 2 consecutive losses
 
@@ -69,6 +78,11 @@ input bool     InpEnableRiskGuardian   = false;      // Enable Daily Loss Circui
 input double   InpMaxDailyDrawdownPct  = 5.0;        // Daily Drawdown Auto-Halt Circuit Breaker (%)
 input bool     InpFridayLockout        = false;      // Block New Entries after Friday Cutoff (false = DISABLED)
 input int      InpFridayCutoffHour     = 20;         // Friday Entry Cutoff Hour (Server Time)
+input bool     InpDailyRolloverLock    = true;       // Flatten before metals break and block gap exposure
+input int      InpRolloverFlatHour     = 22;
+input int      InpRolloverFlatMinute   = 30;
+input int      InpRolloverResumeHour   = 1;
+input int      InpRolloverResumeMinute = 15;
 
 input group "=== 8. VISUAL MATRIX HUD ==="
 input bool     InpEnableHUD            = true;       // Render Real-Time On-Chart HUD
@@ -329,9 +343,12 @@ int GetActivePositionCount(ulong magic, double &openPrice, double &currentSl, do
 }
 
 //+------------------------------------------------------------------+
-//| Manage Active Position (Instant Dynamic Breakeven Lock)          |
+//| Manage Active Position (Delayed Dynamic Profit Lock)             |
 //+------------------------------------------------------------------+
-void ManagePosition(long posType, double openPrice, double currentSl, ulong ticket, double beTriggerPts, double beLockPts)
+void ManagePosition(long posType, double openPrice, double currentSl, ulong ticket,
+                    double beTriggerPts, double beLockPts,
+                    double stage2TriggerPts, double stage2LockPts,
+                    double stage3TriggerPts, double stage3LockPts)
 {
    double point  = g_symbolInfo.Point();
    double bid    = g_symbolInfo.Bid();
@@ -344,26 +361,36 @@ void ManagePosition(long posType, double openPrice, double currentSl, ulong tick
    if(posType == POSITION_TYPE_BUY)
    {
       double profitPoints = (bid - openPrice) / point;
-      if(profitPoints >= beTriggerPts)
+      double desiredLockPts = 0.0;
+      int stage = 0;
+      if(InpEnableStagedProfitLock && profitPoints >= stage3TriggerPts) { desiredLockPts = stage3LockPts; stage = 3; }
+      else if(InpEnableStagedProfitLock && profitPoints >= stage2TriggerPts) { desiredLockPts = stage2LockPts; stage = 2; }
+      else if(profitPoints >= beTriggerPts) { desiredLockPts = beLockPts; stage = 1; }
+      if(stage > 0)
       {
-         double targetSl = NormalizeDouble(openPrice + (beLockPts * point), digits);
+         double targetSl = NormalizeDouble(openPrice + (desiredLockPts * point), digits);
          if(currentSl < targetSl || currentSl == 0.0)
          {
-            g_trade.PositionModify(ticket, targetSl, g_position.TakeProfit());
-            PrintFormat("[M1 Velocity] BUY BREAKEVEN LOCKED: Profit %.1f pts -> SL set to %.5f", profitPoints, targetSl);
+            if(g_trade.PositionModify(ticket, targetSl, g_position.TakeProfit()))
+               PrintFormat("[M1 ProfitRunner] BUY STAGE %d LOCK: Profit %.1f pts -> SL %.5f (+%.1f pts)", stage, profitPoints, targetSl, desiredLockPts);
          }
       }
    }
    else if(posType == POSITION_TYPE_SELL)
    {
       double profitPoints = (openPrice - ask) / point;
-      if(profitPoints >= beTriggerPts)
+      double desiredLockPts = 0.0;
+      int stage = 0;
+      if(InpEnableStagedProfitLock && profitPoints >= stage3TriggerPts) { desiredLockPts = stage3LockPts; stage = 3; }
+      else if(InpEnableStagedProfitLock && profitPoints >= stage2TriggerPts) { desiredLockPts = stage2LockPts; stage = 2; }
+      else if(profitPoints >= beTriggerPts) { desiredLockPts = beLockPts; stage = 1; }
+      if(stage > 0)
       {
-         double targetSl = NormalizeDouble(openPrice - (beLockPts * point), digits);
+         double targetSl = NormalizeDouble(openPrice - (desiredLockPts * point), digits);
          if(currentSl > targetSl || currentSl == 0.0)
          {
-            g_trade.PositionModify(ticket, targetSl, g_position.TakeProfit());
-            PrintFormat("[M1 Velocity] SELL BREAKEVEN LOCKED: Profit %.1f pts -> SL set to %.5f", profitPoints, targetSl);
+            if(g_trade.PositionModify(ticket, targetSl, g_position.TakeProfit()))
+               PrintFormat("[M1 ProfitRunner] SELL STAGE %d LOCK: Profit %.1f pts -> SL %.5f (+%.1f pts)", stage, profitPoints, targetSl, desiredLockPts);
          }
       }
    }
@@ -470,6 +497,22 @@ bool IsFridayLockoutActive()
 }
 
 //+------------------------------------------------------------------+
+//| Daily metals rollover gap guard (broker server time)             |
+//+------------------------------------------------------------------+
+bool IsDailyRolloverLockout()
+{
+   if(!InpDailyRolloverLock) return false;
+   MqlDateTime dt;
+   TimeCurrent(dt);
+   int nowMinutes = dt.hour * 60 + dt.min;
+   int flatMinutes = InpRolloverFlatHour * 60 + InpRolloverFlatMinute;
+   int resumeMinutes = InpRolloverResumeHour * 60 + InpRolloverResumeMinute;
+   if(flatMinutes > resumeMinutes)
+      return (nowMinutes >= flatMinutes || nowMinutes < resumeMinutes);
+   return (nowMinutes >= flatMinutes && nowMinutes < resumeMinutes);
+}
+
+//+------------------------------------------------------------------+
 //| Render On-Chart HUD                                              |
 //+------------------------------------------------------------------+
 void RenderHUD(const SqueezeState &sqz, double fastEma, double slowEma, double m5Fast, double m5Slow,
@@ -478,7 +521,7 @@ void RenderHUD(const SqueezeState &sqz, double fastEma, double slowEma, double m
 {
    if(!InpEnableHUD) return;
 
-   string prefix = "QT16_VELOCITY_";
+   string prefix = "QT1656_PROFITRUNNER_";
    string lines[8];
 
    string sqzText = sqz.isSqueezeOn ? "COMPRESSED [SQUEEZE ON]" : (sqz.isBreakout ? "BREAKOUT EXPLOSION" : "EXPANDING");
@@ -496,7 +539,7 @@ void RenderHUD(const SqueezeState &sqz, double fastEma, double slowEma, double m
    string pauseStatus = IsLossStreakCooldownActive() ? StringFormat("PAUSED (Anti-Revenge %d mins)", InpLossStreakPauseMins) : "ACTIVE";
    color  statusClr   = IsLossStreakCooldownActive() ? clrCrimson : clrCyan;
 
-   lines[0] = StringFormat(">> QUANTUM TITAN v16.55 [PRECISION SMC SCALPER] - %s <<", pauseStatus);
+   lines[0] = StringFormat(">> QUANTUM TITAN v16.56 [PROFITRUNNER CANDIDATE] - %s <<", pauseStatus);
    lines[1] = StringFormat("Account : DEMO ($%.2f) | Losses Streak: %d | News: %s", AccountInfoDouble(ACCOUNT_EQUITY), g_consecutiveLosses, newsStatus);
    lines[2] = StringFormat("Squeeze : %s | Mom: %s", sqzText, momText);
    lines[3] = StringFormat("Trend   : %s", trendText);
@@ -533,6 +576,24 @@ void RenderHUD(const SqueezeState &sqz, double fastEma, double slowEma, double m
 //+------------------------------------------------------------------+
 int OnInit()
 {
+   if(InpAtrSlMult <= 0.0 || InpAtrTpMult <= 0.0 ||
+      InpAtrBeTriggerMult <= 0.0 || InpAtrBeLockMult < 0.0 ||
+      InpMinBeTriggerPts <= 0.0 || InpMaxBeTriggerPts < InpMinBeTriggerPts ||
+      InpMinBeLockPts < 0.0 || InpMaxBeLockPts < InpMinBeLockPts ||
+      InpMaxBeLockPts >= InpMinBeTriggerPts ||
+      InpStage2TriggerAtr <= InpAtrBeTriggerMult || InpStage2LockAtr <= InpAtrBeLockMult ||
+      InpStage3TriggerAtr <= InpStage2TriggerAtr || InpStage3LockAtr <= InpStage2LockAtr ||
+      InpStage2LockAtr >= InpStage2TriggerAtr || InpStage3LockAtr >= InpStage3TriggerAtr ||
+      InpRolloverFlatHour < 0 || InpRolloverFlatHour > 23 ||
+      InpRolloverResumeHour < 0 || InpRolloverResumeHour > 23 ||
+      InpRolloverFlatMinute < 0 || InpRolloverFlatMinute > 59 ||
+      InpRolloverResumeMinute < 0 || InpRolloverResumeMinute > 59 ||
+      InpBreakevenLockPts >= InpBreakevenTriggerPts)
+   {
+      Print("ProfitRunner invalid exit-policy parameters.");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+
    if(InpDemoOnly && (AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_REAL))
    {
       Alert("🚨 [SECURITY CRITICAL] QuantumTitan v16 is locked to DEMO mode!");
@@ -588,7 +649,7 @@ int OnInit()
       g_handleM5EmaFast == INVALID_HANDLE || g_handleM5EmaSlow == INVALID_HANDLE ||
       g_handleBands == INVALID_HANDLE || g_handleAtrKC == INVALID_HANDLE || g_handleRsi == INVALID_HANDLE)
    {
-      Print("❌ Failed to create indicator handles for v16.55 Velocity");
+      Print("❌ Failed to create indicator handles for v16.56 ProfitRunner");
       return INIT_FAILED;
    }
 
@@ -596,7 +657,7 @@ int OnInit()
    ChartIndicatorAdd(0, 0, g_handleEmaSlow);
    ChartIndicatorAdd(0, 0, g_handleBands);
 
-   PrintFormat("⚡ QuantumTitan v16.55 Institutional Velocity initialized on %s M1 (Magic: %I64u)", _Symbol, g_velocityMagic);
+   PrintFormat("⚡ QuantumTitan v16.56 ProfitRunner candidate initialized on %s M1 (Magic: %I64u)", _Symbol, g_velocityMagic);
    return INIT_SUCCEEDED;
 }
 
@@ -613,7 +674,7 @@ void OnDeinit(const int reason)
    IndicatorRelease(g_handleAtrKC);
    IndicatorRelease(g_handleRsi);
 
-   ObjectsDeleteAll(0, "QT16_VELOCITY_");
+   ObjectsDeleteAll(0, "QT1656_PROFITRUNNER_");
    Comment("");
 }
 
@@ -638,16 +699,24 @@ void OnTick()
    double dynamicTpPts        = InpTakeProfitPoints;
    double dynamicBeTriggerPts = InpBreakevenTriggerPts;
    double dynamicBeLockPts    = InpBreakevenLockPts;
+   double stage2TriggerPts     = 180.0;
+   double stage2LockPts        = 80.0;
+   double stage3TriggerPts     = 250.0;
+   double stage3LockPts        = 150.0;
 
    if(InpUseDynamicAtr)
    {
       dynamicSlPts        = MathMax(150.0, MathMin(350.0, InpAtrSlMult * currentAtrPts));
-      dynamicTpPts        = MathMax(200.0, MathMin(500.0, InpAtrTpMult * currentAtrPts));
-      dynamicBeTriggerPts = MathMax(75.0,  MathMin(150.0, InpAtrBeTriggerMult * currentAtrPts));
-      dynamicBeLockPts    = MathMax(20.0,  MathMin(50.0,  InpAtrBeLockMult * currentAtrPts));
+      dynamicTpPts        = MathMax(240.0, MathMin(600.0, InpAtrTpMult * currentAtrPts));
+      dynamicBeTriggerPts = MathMax(InpMinBeTriggerPts, MathMin(InpMaxBeTriggerPts, InpAtrBeTriggerMult * currentAtrPts));
+      dynamicBeLockPts    = MathMax(InpMinBeLockPts, MathMin(InpMaxBeLockPts, InpAtrBeLockMult * currentAtrPts));
+      stage2TriggerPts     = MathMax(140.0, MathMin(300.0, InpStage2TriggerAtr * currentAtrPts));
+      stage2LockPts        = MathMax(50.0,  MathMin(140.0, InpStage2LockAtr * currentAtrPts));
+      stage3TriggerPts     = MathMax(220.0, MathMin(450.0, InpStage3TriggerAtr * currentAtrPts));
+      stage3LockPts        = MathMax(100.0, MathMin(250.0, InpStage3LockAtr * currentAtrPts));
    }
 
-   // 2. Position Management & Dynamic Breakeven Lock
+   // 2. Position Management & Delayed Dynamic Profit Lock
    double openPrice = 0.0, currentSl = 0.0, currentPnl = 0.0;
    long posType = -1;
    ulong activeTicket = 0;
@@ -656,7 +725,16 @@ void OnTick()
    if(activeTrades > 0)
    {
       g_hadActivePosition = true;
-      ManagePosition(posType, openPrice, currentSl, activeTicket, dynamicBeTriggerPts, dynamicBeLockPts);
+      if(IsDailyRolloverLockout())
+      {
+         if(g_trade.PositionClose(activeTicket))
+            PrintFormat("[ProfitRunner Rollover Guard] Position #%I64u closed before daily metals break.", activeTicket);
+         return;
+      }
+      ManagePosition(posType, openPrice, currentSl, activeTicket,
+                     dynamicBeTriggerPts, dynamicBeLockPts,
+                     stage2TriggerPts, stage2LockPts,
+                     stage3TriggerPts, stage3LockPts);
    }
    else if(g_hadActivePosition)
    {
@@ -718,6 +796,7 @@ void OnTick()
    // 7. Entry Checks
    if(IsDailyLossBreakerTripped()) return;
    if(IsFridayLockoutActive()) return;
+   if(IsDailyRolloverLockout()) return;
    if(activeTrades > 0) return;
    if(IsPostExitCooldownActive()) return;
 

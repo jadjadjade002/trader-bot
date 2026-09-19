@@ -18,7 +18,6 @@
 #include "Include\QuantumTitan\AlphaScoring.mqh"
 #include "Include\QuantumTitan\TrailingSafety.mqh"
 #include "Include\QuantumTitan\DynamicGrid.mqh"
-#include "Include\QuantumTitan\RiskGuardian.mqh"
 #include "Include\QuantumTitan\TelemetryHUD.mqh"
 
 //+------------------------------------------------------------------+
@@ -40,22 +39,11 @@ struct TimeframeProfile
 //+------------------------------------------------------------------+
 //| INPUT PARAMETERS                                                 |
 //+------------------------------------------------------------------+
-input group "=== 1. ACCOUNT SECURITY & CAPITAL PRESERVATION ==="
+input group "=== 1. ACCOUNT SECURITY & EXECUTION ==="
 input bool     InpDemoOnly             = true;       // Lock EA to DEMO Account Only
 input ulong    InpMagicNumber          = 991600;     // Base Magic Number (v15 Apex ID)
 input bool     InpAutoMagicByPeriod    = true;       // Auto-Derive Magic by Timeframe (M1/M5/M15/H1 safe isolation)
-input double   InpMaxAccountLots       = 0.20;       // Max Total Open Lots on Account (Shared Risk Cap across 4 charts)
-input double   InpMaxSpreadPoints      = 65.0;       // Max Allowed Spread (Points - Safe for Gold Volatility)
-input double   InpMaxDailyLossPct      = 8.0;        // Daily Loss Kill-Switch (%)
-input double   InpHardEquityFloor      = 30.0;       // Hard Equity Floor ($) - Stop All Trading
-input int      InpMaxTradesPerDay      = 16;         // Maximum Completed Trades Per Day
-input int      InpMaxLosingStreak      = 3;          // Max Consecutive Losses Before Pausing
-
-input group "=== 2. MQL5 NATIVE ECONOMIC NEWS SHIELD ==="
-input bool     InpUseNewsFilter        = true;       // Enable Economic Calendar News Filter
-input int      InpNewsBufferMinsBefore = 30;         // Pause Trading Before High-Impact News (Mins)
-input int      InpNewsBufferMinsAfter  = 30;         // Pause Trading After High-Impact News (Mins)
-input bool     InpFilterUSDOnly        = true;       // Filter USD News (Critical for Gold & Majors)
+input double   InpMaxSpreadPoints      = 65.0;       // Grid execution spread ceiling
 
 input group "=== 3. MARKET REGIME & ALPHA SCORING (vs Cryptohopper) ==="
 input int      InpScoreThreshold       = 75;         // Minimum Confluence Score (0-100)
@@ -92,7 +80,6 @@ CSymbolInfo            g_symbolInfo;
 CAlphaScoringEngine    g_alphaEngine;
 CTrailingSafetyEngine  g_trailingEngine;
 CDynamicGridEngine     g_gridEngine;
-CRiskGuardian          g_riskGuardian;
 CTelemetryHUD          g_hud;
 
 TimeframeProfile       g_profile;
@@ -264,20 +251,10 @@ int OnInit()
       return INIT_FAILED;
    }
 
-   // 8. Initialize Module 4: Risk Guardian & Macro News Shield
-   if(!g_riskGuardian.Init(_Symbol, g_actualMagic, InpMaxDailyLossPct, InpHardEquityFloor,
-                           InpMaxTradesPerDay, InpMaxLosingStreak, InpMaxSpreadPoints,
-                           InpUseNewsFilter, InpNewsBufferMinsBefore, InpNewsBufferMinsAfter,
-                           InpMaxAccountLots))
-   {
-      Print("❌ Failed to initialize Module 4: Risk Guardian");
-      return INIT_FAILED;
-   }
-
-   // 9. Initialize Module 5: Visual Matrix HUD & Telemetry
+   // 8. Initialize Module 4: Visual Matrix HUD & Telemetry
    if(!g_hud.Init(_Symbol, InpEnableHUD, InpSendPushAlerts, InpSendPopAlerts))
    {
-      Print("❌ Failed to initialize Module 5: Visual Matrix HUD");
+      Print("❌ Failed to initialize Module 4: Visual Matrix HUD");
       return INIT_FAILED;
    }
 
@@ -294,9 +271,7 @@ int OnInit()
    PrintFormat("   • Module 2 (TTP & Safety)   : ACTIVE (BE: %.2fR, Trail: %.2fR)", g_profile.beTriggerR, g_profile.trailTriggerR);
    PrintFormat("   • Module 3 (Geometric Grid) : ACTIVE (Max Orders: %d, Grid Step: %.2f ATR, Cash Buffer: %.1f%%)",
       InpMaxGridOrdersPerSide, g_profile.gridStepMultiplier, InpMinMarginReservePct);
-   PrintFormat("   • Module 4 (Risk Guardian)  : ACTIVE (HWM Loss: %.1f%%, Floor: $%.2f, Max Lots: %.2f)",
-      InpMaxDailyLossPct, InpHardEquityFloor, InpMaxAccountLots);
-   Print("   • Module 5 (Matrix HUD)     : ACTIVE");
+   Print("   • Module 4 (Matrix HUD)     : ACTIVE");
    Print("══════════════════════════════════════════════════════════════");
 
    // 10. Apply Institutional TradingView Dark Matrix Palette
@@ -387,14 +362,10 @@ void OnTick()
    double point = g_symbolInfo.Point();
    int    digits= g_symbolInfo.Digits();
 
-   // 3. STEP 1: Institutional Risk Guardian Audit
-   RiskTelemetry riskTelem;
-   bool isTradingPermitted = g_riskGuardian.ValidateExecution(riskTelem);
-
-   // 4. STEP 2: Module 2 Dynamic Trailing & Breakeven Management (Uses Timeframe ATR)
+   // 3. STEP 1: Module 2 Dynamic Trailing & Breakeven Management (Uses Timeframe ATR)
    g_trailingEngine.UpdateTrailing(currentAtr);
 
-   // 5. STEP 3: Module 3 Dynamic Basket Rebalance & Take Profit (Uses Timeframe ATR)
+   // 4. STEP 2: Module 3 Dynamic Basket Rebalance & Take Profit (Uses Timeframe ATR)
    g_gridEngine.CheckAndCloseBasket(currentAtr);
 
    // Fetch Telemetry from Grid and Alpha engines (Real-Time Macro Brain & Signal Evaluation)
@@ -402,7 +373,7 @@ void OnTick()
    AlphaScoreTelemetry alphaTelem;
    ENUM_ALPHA_SIGNAL liveAlphaSignal = g_alphaEngine.EvaluateSignals(alphaTelem);
 
-   // 6. Render On-Chart Visual Matrix HUD (Decoupled & Throttled to max 1 render/sec)
+   // 5. Render On-Chart Visual Matrix HUD (Decoupled & Throttled to max 1 render/sec)
    static ulong s_lastHudRenderMs = 0;
    ulong currentTickMs = GetTickCount64();
    if(currentTickMs - s_lastHudRenderMs >= 1000)
@@ -418,13 +389,8 @@ void OnTick()
          gridTelem.sellOrderCount,
          gridTelem.totalSellLots,
          floatingPnl,
-         riskTelem.dailyHighWaterMark,
-         riskTelem.currentDrawdownPct,
-         gridTelem.freeMarginPct,
-         riskTelem.inNewsLockout ? riskTelem.newsEventName : "CLEAR",
-         isTradingPermitted,
-         riskTelem.rejectReason,
-         alphaTelem.macroZoneName,
+          gridTelem.freeMarginPct,
+          alphaTelem.macroZoneName,
          alphaTelem.dailyBias,
          alphaTelem.killzone
       );
@@ -472,10 +438,8 @@ void OnTick()
       ObjectDelete(0, avgPriceObj);
    }
 
-   // 7. STEP 4: Active Basket Grid Layer Placement (if in active position)
-   // DECOUPLED ARCHITECTURE: Existing basket is allowed to rebalance/average-down
-   // as long as riskTelem.canManageGrid is TRUE and market is NOT in a Volatility Shock!
-   if(riskTelem.canManageGrid && alphaTelem.regime != REGIME_VOLATILITY_SHOCK)
+   // 6. STEP 3: Active Basket Grid Layer Placement (if in active position)
+   if(alphaTelem.regime != REGIME_VOLATILITY_SHOCK)
    {
       if(gridTelem.buyOrderCount > 0 || gridTelem.sellOrderCount > 0)
       {
@@ -483,11 +447,7 @@ void OnTick()
       }
    }
 
-   // 8. STEP 5: New Cycle Entry Gatekeeper
-   // Strictly block opening NEW trade cycles if circuit breaker, news lockout, or streak pause is active!
-   if(!riskTelem.canOpenNewCycle) return;
-
-   // 9. STEP 6: 3Commas Trailing Buy Reversal Check
+   // 7. STEP 4: 3Commas Trailing Buy Reversal Check
    double execLot = 0.0;
    if(g_trailingEngine.CheckTrailingSafetyTrigger(bid, ask, execLot))
    {
@@ -612,7 +572,6 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                double netPnl = profit + swap + comm + fee;
                PrintFormat("[QuantumTitan v16.00] DEAL CLOSED #%I64u (Magic: %I64u, %s): Net PnL: %s$%.2f (Profit: $%.2f, Swap: $%.2f, Comm: $%.2f)",
                   dealTicket, g_actualMagic, g_profile.profileName, (netPnl >= 0 ? "+" : ""), netPnl, profit, swap, comm);
-               g_riskGuardian.InvalidateStatsCache();
             }
          }
       }

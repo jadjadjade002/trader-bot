@@ -20,3 +20,23 @@ secrets*
 /*.png
 screen_*.png
 compile.log
+
+# Isolated MT5 tester: cached account data and broker history stay local
+.mt5-v17.local/
+.mt5-v18.local/
+.mt5-v19.local/
+.mt5-v20.local/
+/.mt5-v2167.local/
+/.mt5-v16_1.local/
+/.deploy_*/
+/compiled/
+/data/
+/deploy/
+/dist_charts/
+/reports/
+data/*.csv
+data/*.metadata.json
+research/results*.json
+!scripts/v17_development.ini
+!scripts/v17_holdout.ini
+__pycache__/

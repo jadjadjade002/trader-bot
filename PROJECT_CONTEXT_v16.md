@@ -104,7 +104,7 @@ d:\project\trader-bot\
 | ชาร์ต | Timeframe | กลยุทธ์ / EA | Magic Number | คุณสมบัติหลัก |
 | :--- | :--- | :--- | :--- | :--- |
 | **Chart 1** | **XAUUSD M1** | `QuantumTitan_v16_Apex` | `991601` | M1 Ultra Scalper (SMC + FVG + Sweep) เก็บกำไรเร็ว SL 320 pts, TP 1.35R |
-| **Chart 2** | **XAUUSD M1** | `QuantumTitan_v16_Velocity` | `991601` | M1 Rapid Momentum (Squeeze Mom + EMA Pullback) Quick TP +180 pts ($1.80), BE +85 pts |
+| **Chart 2** | **XAUUSD M1** | `QuantumTitan_v16_Velocity` | `991602` | M1 Rapid Momentum (Squeeze Mom + EMA Pullback) Quick TP +180 pts ($1.80), BE +85 pts |
 | **Chart 3** | **XAUUSD M5** | `QuantumTitan_v16_Apex` | `991605` | M5 Fast Intraday (HTF: H1) SL 450 pts, TP 1.25R, คุมรอบสวิงระยะสั้น |
 | **Chart 4** | **XAUUSD M15** | `QuantumTitan_v16_Apex` | `991615` | M15 Intraday Swing (HTF: H1) SL 650 pts, TP 1.25R, คุมโครงสร้างรายวัน |
 | **Chart 5** | **XAUUSD H1** | `QuantumTitan_v16_Apex` | `1007985` | H1 Macro Trend (HTF: H4) SL 1,200 pts, TP 1.25R, คุมทิศทางภาพใหญ่ของสถาบัน |
