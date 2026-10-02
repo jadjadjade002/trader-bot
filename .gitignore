@@ -17,8 +17,7 @@ secrets*
 *.env
 
 # Local screenshots and runtime captures
-/*.png
-screen_*.png
+*.png
 compile.log
 
 # Isolated MT5 tester: cached account data and broker history stay local

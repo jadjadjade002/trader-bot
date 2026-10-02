@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //|                                  QuantumTitan_v9_Singularity.mq5 |
-//|           v9.00 Singularity Institutional Quant Framework        |
+//|          v10.10 Singularity Institutional Quant Framework        |
 //|      Multi-Agent Autonomous Trading System: Top 1% Standard      |
 //|      Surpassing Benchmarks: Pionex, 3Commas, Cryptohopper        |
 //|                    Chief Engineer: Gemini Quantum                |
 //+------------------------------------------------------------------+
-#property copyright "QuantumTitan Institutional Quant Framework v9.00"
+#property copyright "QuantumTitan Institutional Quant Framework v10.10"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "9.00"
-#property description "v9+++ Singularity: Market Regime Scoring (vs Cryptohopper), Dynamic TTP & Trailing Buy (vs 3Commas), ATR Geometric Grid & Cash Buffer (vs Pionex), Native MQL5 News Shield"
+#property version   "10.10"
+#property description "v10.10 Singularity: Trend-Disciplined Regime Matrix, HTF-Anchored Risk Budgeting"
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
@@ -45,9 +45,9 @@ input double   InpShockMultiplier      = 2.2;        // ATR Volatility Shock Mul
 input ENUM_TIMEFRAMES InpHTF           = PERIOD_H1;  // Institutional Higher Timeframe Trend
 
 input group "=== 4. DYNAMIC TRAILING & SAFETY (vs 3Commas) ==="
-input double   InpBreakEvenTriggerR    = 0.4;        // Breakeven Activation (0.4R Profit)
-input double   InpTrailingTriggerR     = 1.2;        // Trailing Activation (1.2R Profit)
-input double   InpTrailingAtrMult      = 0.6;        // Dynamic Trailing Distance (ATR Multiplier)
+input double   InpBreakEvenTriggerR    = 0.35;       // Breakeven Activation (0.35R Profit)
+input double   InpTrailingTriggerR     = 0.75;       // Trailing Activation (0.75R Profit - Faster Profit Lock)
+input double   InpTrailingAtrMult      = 0.45;       // Dynamic Trailing Distance (ATR Multiplier)
 input double   InpSafetyBouncePoints   = 35.0;       // Trailing Buy Reversal Bounce (Points)
 
 input group "=== 5. ATR GEOMETRIC GRID & CASH BUFFER (vs Pionex) ==="
@@ -61,7 +61,7 @@ input double   InpBasketTpAtrMult      = 0.8;        // Basket Take Profit Targe
 input group "=== 6. VISUAL MATRIX HUD & TELEMETRY ==="
 input bool     InpEnableHUD            = true;       // Render Real-Time On-Chart HUD
 input bool     InpSendPushAlerts       = true;       // Send MT5 Mobile Push Notifications
-input bool     InpSendPopAlerts        = true;       // Send Terminal Popup Alerts
+input bool     InpSendPopAlerts        = false;      // Send Terminal Popup Alerts (Disabled to prevent blocking GUI modal)
 
 //+------------------------------------------------------------------+
 //| GLOBAL SYSTEM INSTANCES                                          |
@@ -85,7 +85,7 @@ int                    g_handleAtrMain = INVALID_HANDLE;
 int OnInit()
 {
    Print("══════════════════════════════════════════════════════════════");
-   Print("🚀 INITIALIZING QUANTUMTITAN v9+++ SINGULARITY...");
+   Print("🚀 INITIALIZING QUANTUMTITAN v10 SINGULARITY...");
    Print("══════════════════════════════════════════════════════════════");
 
    // 1. Demo Lock Check
@@ -116,8 +116,8 @@ int OnInit()
    else
       g_trade.SetTypeFilling(ORDER_FILLING_RETURN);
 
-   // 4. Main ATR Indicator for Execution Sizing
-   g_handleAtrMain = iATR(_Symbol, _Period, 14);
+   // 4. Main ATR Indicator for Execution Sizing (Strictly anchored to InpHTF H1)
+   g_handleAtrMain = iATR(_Symbol, InpHTF, 14);
    if(g_handleAtrMain == INVALID_HANDLE)
    {
       Print("❌ Failed to create main ATR handle");
@@ -140,7 +140,7 @@ int OnInit()
 
    // 7. Initialize Module 3: ATR Geometric Grid Engine (vs Pionex)
    if(!g_gridEngine.Init(_Symbol, InpMagicNumber, InpBaseLot, InpMaxGridOrdersPerSide,
-                         InpGridStepAtrMult, InpLotMultiplier, InpMinMarginReservePct))
+                         InpGridStepAtrMult, InpLotMultiplier, InpMinMarginReservePct, InpBasketTpAtrMult))
    {
       Print("❌ Failed to initialize Module 3: Dynamic Grid Engine");
       return INIT_FAILED;
@@ -162,16 +162,37 @@ int OnInit()
       return INIT_FAILED;
    }
 
-   g_lastBarTime = 0;
-   g_hud.DispatchAlert("SYSTEM BOOT", "QuantumTitan v9+++ Singularity activated successfully.", true);
+   g_lastBarTime = iTime(_Symbol, _Period, 0);
+   g_hud.DispatchAlert("SYSTEM BOOT", "QuantumTitan v10.10 Singularity activated successfully.", true);
 
-   Print("✅ QUANTUMTITAN v9+++ SINGULARITY INITIALIZED WITH 0 ERRORS.");
-   Print("   • Module 1 (Alpha Scoring)  : ACTIVE (Min Score: ", InpScoreThreshold, ")");
+   Print("✅ QUANTUMTITAN v10.10 SINGULARITY INITIALIZED WITH 0 ERRORS.");
+   Print("   • Module 1 (Alpha Scoring)  : ACTIVE (Min Score: ", InpScoreThreshold, ", Strict Trend-Gate)");
    Print("   • Module 2 (TTP & Safety)   : ACTIVE (BE: ", InpBreakEvenTriggerR, "R, Trail: ", InpTrailingTriggerR, "R)");
-   Print("   • Module 3 (Geometric Grid) : ACTIVE (Max Orders: ", InpMaxGridOrdersPerSide, ", Cash Buffer: ", InpMinMarginReservePct, "%)");
+   Print("   • Module 3 (Geometric Grid) : ACTIVE (Max Orders: ", InpMaxGridOrdersPerSide, ", Cash Buffer: ", InpMinMarginReservePct, "%, TP Mult: ", InpBasketTpAtrMult, ")");
    Print("   • Module 4 (Risk Guardian)  : ACTIVE (HWM Loss: ", InpMaxDailyLossPct, "%, Floor: $", InpHardEquityFloor, ")");
    Print("   • Module 5 (Matrix HUD)     : ACTIVE");
    Print("══════════════════════════════════════════════════════════════");
+
+   // 10. Apply Institutional TradingView Dark Matrix Palette (User Theme Reference)
+   ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
+   ChartSetInteger(0, CHART_SHOW_GRID, false);
+   ChartSetInteger(0, CHART_SHOW_VOLUMES, CHART_VOLUME_TICK);
+   ChartSetInteger(0, CHART_SHIFT, true);
+   ChartSetDouble(0, CHART_SHIFT_SIZE, 15.0);
+   ChartSetInteger(0, CHART_AUTOSCROLL, true);
+   
+   ChartSetInteger(0, CHART_COLOR_BACKGROUND, C'19,23,34');      // Deep Slate Charcoal #131722
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, C'165,175,190');   // Soft Light Slate Axes
+   ChartSetInteger(0, CHART_COLOR_GRID, C'28,34,46');            // Grid
+   ChartSetInteger(0, CHART_COLOR_CHART_UP, C'38,166,154');      // TradingView Teal Green Wick
+   ChartSetInteger(0, CHART_COLOR_CHART_DOWN, C'239,83,80');     // TradingView Coral Red Wick
+   ChartSetInteger(0, CHART_COLOR_CANDLE_BULL, C'38,166,154');   // Teal Green Body
+   ChartSetInteger(0, CHART_COLOR_CANDLE_BEAR, C'239,83,80');   // Coral Red Body
+   ChartSetInteger(0, CHART_COLOR_CHART_LINE, C'38,166,154');
+   ChartSetInteger(0, CHART_COLOR_VOLUME, C'38,166,154');        // Volume Bars
+   ChartSetInteger(0, CHART_COLOR_ASK, C'239,83,80');            // Ask line
+   ChartSetInteger(0, CHART_COLOR_BID, C'38,166,154');           // Bid line
+   ChartRedraw(0);
 
    return INIT_SUCCEEDED;
 }
@@ -181,7 +202,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-   Print("🛑 Deinitializing QuantumTitan v9+++ Singularity... Reason: ", reason);
+   Print("🛑 Deinitializing QuantumTitan v10.10 Singularity... Reason: ", reason);
    if(g_handleAtrMain != INVALID_HANDLE)
    {
       IndicatorRelease(g_handleAtrMain);
@@ -197,6 +218,20 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
+   // 0. STEP 0: Trade Context & Terminal Permissions Gatekeeper
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) ||
+      !MQLInfoInteger(MQL_TRADE_ALLOWED) ||
+      !AccountInfoInteger(ACCOUNT_TRADE_EXPERT))
+   {
+      return; // Algo trading disabled in terminal or EA permissions
+   }
+
+   ENUM_SYMBOL_TRADE_MODE tradeMode = (ENUM_SYMBOL_TRADE_MODE)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_MODE);
+   if(tradeMode == SYMBOL_TRADE_MODE_DISABLED)
+   {
+      return; // Trading on this symbol disabled by broker
+   }
+
    // 1. Fetch Current ATR Value
    double atrBuf[];
    ArraySetAsSeries(atrBuf, true);
@@ -224,29 +259,47 @@ void OnTick()
    GridBasketTelemetry gridTelem = g_gridEngine.GetTelemetry();
    AlphaScoreTelemetry alphaTelem = g_alphaEngine.GetTelemetry();
 
-   // 6. Render On-Chart Visual Matrix HUD
-   double floatingPnl = gridTelem.totalBuyProfit + gridTelem.totalSellProfit;
-   g_hud.RenderHUD(
-      alphaTelem.regimeName,
-      alphaTelem.totalScoreBuy,
-      alphaTelem.totalScoreSell,
-      gridTelem.buyOrderCount,
-      gridTelem.totalBuyLots,
-      gridTelem.sellOrderCount,
-      gridTelem.totalSellLots,
-      floatingPnl,
-      riskTelem.dailyHighWaterMark,
-      riskTelem.currentDrawdownPct,
-      gridTelem.freeMarginPct,
-      riskTelem.inNewsLockout ? riskTelem.newsEventName : "CLEAR",
-      isTradingPermitted,
-      riskTelem.rejectReason
-   );
+   // 6. Render On-Chart Visual Matrix HUD (Decoupled & Throttled to max 1 render/sec to eliminate event queue overflow)
+   static ulong s_lastHudRenderMs = 0;
+   ulong currentTickMs = GetTickCount64();
+   if(currentTickMs - s_lastHudRenderMs >= 1000)
+   {
+      s_lastHudRenderMs = currentTickMs;
+      double floatingPnl = gridTelem.totalBuyProfit + gridTelem.totalSellProfit;
+      g_hud.RenderHUD(
+         alphaTelem.regimeName,
+         alphaTelem.totalScoreBuy,
+         alphaTelem.totalScoreSell,
+         gridTelem.buyOrderCount,
+         gridTelem.totalBuyLots,
+         gridTelem.sellOrderCount,
+         gridTelem.totalSellLots,
+         floatingPnl,
+         riskTelem.dailyHighWaterMark,
+         riskTelem.currentDrawdownPct,
+         gridTelem.freeMarginPct,
+         riskTelem.inNewsLockout ? riskTelem.newsEventName : "CLEAR",
+         isTradingPermitted,
+         riskTelem.rejectReason
+      );
+   }
 
-   // If risk guardian blocked trading (Circuit breaker, news lockout, floor), skip entries
-   if(!isTradingPermitted) return;
+   // 7. STEP 4: Active Basket Grid Layer Placement (if in active position)
+   // DECOUPLED ARCHITECTURE: Existing basket is allowed to rebalance/average-down
+   // as long as riskTelem.canManageGrid is TRUE and market is NOT in a Volatility Shock!
+   if(riskTelem.canManageGrid && alphaTelem.regime != REGIME_VOLATILITY_SHOCK)
+   {
+      if(gridTelem.buyOrderCount > 0 || gridTelem.sellOrderCount > 0)
+      {
+         g_gridEngine.EvaluateGridStep(currentAtr, true, true);
+      }
+   }
 
-   // 7. STEP 4: 3Commas Trailing Buy Reversal Check
+   // 8. STEP 5: New Cycle Entry Gatekeeper
+   // Strictly block opening NEW trade cycles if circuit breaker, news lockout, or streak pause is active!
+   if(!riskTelem.canOpenNewCycle) return;
+
+   // 9. STEP 6: 3Commas Trailing Buy Reversal Check
    double execLot = 0.0;
    if(g_trailingEngine.CheckTrailingSafetyTrigger(bid, ask, execLot))
    {
@@ -257,44 +310,89 @@ void OnTick()
       }
    }
 
-   // 8. STEP 5: Grid Layer Placement (if in active position)
-   if(gridTelem.buyOrderCount > 0 || gridTelem.sellOrderCount > 0)
-   {
-      g_gridEngine.EvaluateGridStep(currentAtr, true, true);
-   }
-
-   // 9. STEP 6: New Bar Signal Generation (Bar-Close Discipline)
+   // 10. STEP 7: New Bar Signal Generation (Bar-Close Discipline with Multi-Tick Execution Resilience)
    datetime currentBarTime = iTime(_Symbol, _Period, 0);
-   if(currentBarTime == g_lastBarTime) return; // Only evaluate new entries once per closed bar
-   g_lastBarTime = currentBarTime;
+   if(currentBarTime <= 0 || currentBarTime == g_lastBarTime) return; // Only evaluate new entries for unhandled bars
+
+   static int s_signalRetries = 0;
+   const int MAX_SIGNAL_RETRIES = 5;
 
    // Evaluate Alpha Confluence Signals (Score >= 75)
    ENUM_ALPHA_SIGNAL signal = g_alphaEngine.EvaluateSignals(alphaTelem);
 
-   // Only open new initial entries if no opposing positions exist and basket within limits
-   if(signal == ALPHA_SIGNAL_BUY && gridTelem.buyOrderCount == 0 && gridTelem.sellOrderCount == 0)
+   // If no trade signal or conditions not met to enter a cycle, lock bar immediately to save CPU
+   if(signal == ALPHA_SIGNAL_NONE || (gridTelem.buyOrderCount > 0 || gridTelem.sellOrderCount > 0))
    {
-      double sl = NormalizeDouble(ask - (currentAtr * 1.5), digits);
-      double tp = NormalizeDouble(ask + (currentAtr * 1.8 * 1.5), digits);
+      g_lastBarTime = currentBarTime;
+      s_signalRetries = 0;
+      return;
+   }
+
+   // DYNAMIC MICRO-ACCOUNT RISK BUDGETING: Cap single-order SL to max $3.50 (7% of $50 equity)
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   double maxRiskDollars = (equity <= 100.0) ? 3.50 : (equity * 0.02);
+   double tickVal = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double tickSz  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+   double pointVal = (tickSz > 0) ? (tickVal / tickSz) * point : 1.0;
+   double maxSlPoints = (pointVal > 0 && InpBaseLot > 0) ? (maxRiskDollars / (InpBaseLot * pointVal)) : ((point > 0.0) ? (currentAtr * 1.5 / point) : 100.0);
+   // Micro-Account Anti-Spread Noise Guard: Ensure Gold has at least 350 points ($3.50) buffer, preventing noise stop-outs
+   double minSafeSlDist = (point > 0.0) ? (350.0 * point) : 0.35;
+   double targetSlDist  = MathMax(currentAtr * 1.2, minSafeSlDist);
+   double slDist        = MathMin(targetSlDist, maxSlPoints * point);
+   // Realistic 1.25R TP target (allows TTP to trail and lock in earlier)
+   double tpDist        = slDist * 1.25;
+
+   bool orderFilled = false;
+
+   if(signal == ALPHA_SIGNAL_BUY)
+   {
+      double sl = NormalizeDouble(ask - slDist, digits);
+      double tp = NormalizeDouble(ask + tpDist, digits);
 
       if(g_trade.Buy(InpBaseLot, _Symbol, ask, sl, tp, "QuantumTitan_Alpha_Buy"))
       {
-         g_hud.DispatchAlert("ALPHA BUY ENTRY", StringFormat("Score: %d/100 | Regime: %s | SL: %.5f | TP: %.5f",
-            alphaTelem.totalScoreBuy, alphaTelem.regimeName, sl, tp));
+         orderFilled = true;
+         g_hud.DispatchAlert("ALPHA BUY ENTRY", StringFormat("Score: %d/100 | Regime: %s | SL: %.5f ($%.2f risk) | TP: %.5f",
+            alphaTelem.totalScoreBuy, alphaTelem.regimeName, sl, maxRiskDollars, tp));
          g_hud.DrawTradeArrow("BUY_" + IntegerToString((int)TimeCurrent()), TimeCurrent(), ask, true);
       }
+      else
+      {
+         s_signalRetries++;
+         PrintFormat("[AlphaScoring] BUY execution attempt %d failed (Retcode: %u). Retrying next tick...",
+            s_signalRetries, g_trade.ResultRetcode());
+      }
    }
-   else if(signal == ALPHA_SIGNAL_SELL && gridTelem.buyOrderCount == 0 && gridTelem.sellOrderCount == 0)
+   else if(signal == ALPHA_SIGNAL_SELL)
    {
-      double sl = NormalizeDouble(bid + (currentAtr * 1.5), digits);
-      double tp = NormalizeDouble(bid - (currentAtr * 1.8 * 1.5), digits);
+      double sl = NormalizeDouble(bid + slDist, digits);
+      double tp = NormalizeDouble(bid - tpDist, digits);
 
       if(g_trade.Sell(InpBaseLot, _Symbol, bid, sl, tp, "QuantumTitan_Alpha_Sell"))
       {
-         g_hud.DispatchAlert("ALPHA SELL ENTRY", StringFormat("Score: %d/100 | Regime: %s | SL: %.5f | TP: %.5f",
-            alphaTelem.totalScoreSell, alphaTelem.regimeName, sl, tp));
+         orderFilled = true;
+         g_hud.DispatchAlert("ALPHA SELL ENTRY", StringFormat("Score: %d/100 | Regime: %s | SL: %.5f ($%.2f risk) | TP: %.5f",
+            alphaTelem.totalScoreSell, alphaTelem.regimeName, sl, maxRiskDollars, tp));
          g_hud.DrawTradeArrow("SELL_" + IntegerToString((int)TimeCurrent()), TimeCurrent(), bid, false);
       }
+      else
+      {
+         s_signalRetries++;
+         PrintFormat("[AlphaScoring] SELL execution attempt %d failed (Retcode: %u). Retrying next tick...",
+            s_signalRetries, g_trade.ResultRetcode());
+      }
+   }
+
+   // Update g_lastBarTime only if filled or if max retries exceeded
+   if(orderFilled || s_signalRetries >= MAX_SIGNAL_RETRIES)
+   {
+      if(s_signalRetries >= MAX_SIGNAL_RETRIES && !orderFilled)
+      {
+         PrintFormat("[AlphaScoring] Max execution retries (%d) reached for bar %s. Dropping signal.",
+            MAX_SIGNAL_RETRIES, TimeToString(currentBarTime));
+      }
+      g_lastBarTime = currentBarTime;
+      s_signalRetries = 0;
    }
 }
 
@@ -316,9 +414,14 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
             long entry = HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
             if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT)
             {
-               double pnl = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
-               PrintFormat("[QuantumTitan v9] DEAL CLOSED #%I64u: PnL: %s$%.2f",
-                  dealTicket, (pnl >= 0 ? "+" : ""), pnl);
+               double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+               double swap   = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
+               double comm   = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+               double fee    = HistoryDealGetDouble(dealTicket, DEAL_FEE);
+               double netPnl = profit + swap + comm + fee;
+               PrintFormat("[QuantumTitan v10.10] DEAL CLOSED #%I64u: Net PnL: %s$%.2f (Profit: $%.2f, Swap: $%.2f, Comm: $%.2f)",
+                  dealTicket, (netPnl >= 0 ? "+" : ""), netPnl, profit, swap, comm);
+               g_riskGuardian.InvalidateStatsCache();
             }
          }
       }
