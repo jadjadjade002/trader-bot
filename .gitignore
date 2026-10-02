@@ -40,3 +40,7 @@ research/results*.json
 !scripts/v17_development.ini
 !scripts/v17_holdout.ini
 __pycache__/
+tmp/
+scratch/
+learn*.pdf
+*.b64
