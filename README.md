@@ -1,11 +1,11 @@
-# QuantumTitan V23 — Liquidity Retest Fade (LRF Engine)
+# Aegis Predator — Institutional False Breakout Liquidity Engine
 
 [![Platform](https://img.shields.io/badge/Platform-MetaTrader%205-blue.svg)](https://www.metatrader5.com/)
 [![Language](https://img.shields.io/badge/Language-MQL5-orange.svg)](https://www.mql5.com/)
 [![Asset](https://img.shields.io/badge/Asset-XAUUSD%20(Gold)-gold.svg)]()
-[![Status](https://img.shields.io/badge/Live%20Status-Active%20%2B130%25%2B-brightgreen.svg)]()
+[![Status](https://img.shields.io/badge/Live%20Status-Active%20%2B146%25-brightgreen.svg)]()
 
-ระบบเทรดอัตโนมัติ MetaTrader 5 (MQL5) ระดับ Quantitative สำหรับสินทรัพย์ **XAUUSD (Gold)** บนกรอบเวลา **M1** ทำงานด้วยกลยุทธ์ **Donchian False Breakout Fade (Liquidity Sweep Reversal)** เพื่อดักจับสภาพคล่อง (Liquidity Sweeps) และการทะลุหลอก (False Breakouts) ของรายย่อย พร้อมระบบ **Consecutive Loss Circuit Breaker** ตัดวงจรความเสี่ยงอัตโนมัติ
+ระบบเทรดอัตโนมัติ MetaTrader 5 (MQL5) สถาปัตยกรรม Quantitative ขั้นสูงสำหรับสินทรัพย์ **XAUUSD (Gold)** บนกรอบเวลา **M1** ทำงานด้วยกลยุทธ์ **Donchian False Breakout Fade (Liquidity Sweep Reversal)** ดักจับสภาพคล่อง (Liquidity Hunts) และการทะลุหลอก (Trap Breakouts) ของรายย่อย พร้อมระบบ **Consecutive Loss Circuit Breaker** ตัดวงจรความเสี่ยงอัตโนมัติ
 
 ---
 
@@ -14,73 +14,64 @@
 บอทถูกติดตั้งและรันสดบนบัญชีจริงจำลอง (Demo Account `5056497798`, Server: `MetaQuotes-Demo`, เลเวอเรจ 1:200):
 
 * **เงินทุนตั้งต้น (Initial Deposit):** $70.00 USD (25 ก.ย. 2026)
-* **ยอดบาลานซ์ปัจจุบัน (Current Balance):** **$158.74 USD**
-* **มูลค่าพอร์ตสุทธิ (Current Equity):** **$162.13 – $170.77 USD**
-* **ผลตอบแทนสุทธิ (Net Gain):** **+131.6% ถึง +144.0% (กำไรเกินเท่าตัวใน ~1 สัปดาห์)**
-* **อัตราชนะ (Win Rate):** **~39.6%**
+* **ยอดบาลานซ์ปัจจุบัน (Current Balance):** **$172.36 USD**
+* **กำไรสุทธิสะสม (Net PnL):** **+$102.36 USD (+146.2%)**
+* **อัตราชนะ (Win Rate):** **40.9%**
 * **อัตราส่วนผลตอบแทนต่อความเสี่ยง (Risk:Reward):** **1 : 2.0 (2.0R Asymmetric Payoff)**
-* **ไม้ที่ปิดรอบแล้ว (Closed Roundtrips):** 96+ ไม้
+* **จำนวนไม้ที่ปิดรอบแล้ว (Closed Roundtrips):** **110 ไม้**
+* **สถานะความปลอดภัย (Circuit Breaker):** ทำงานสมบูรณ์ (ตัดพักความเสี่ยง 90 นาทีอัตโนมัติเมื่อชน 4 ไม้เสียติดกัน)
 
 ---
 
-## 2. ทำไมกลยุทธ์ Liquidity Fade ถึงสร้างกำไรสูงใน M1?
+## 2. ปรัชญาการล่าสภาพคล่อง (Predator Liquidity Fade Engine)
 
-ตามตำราเทรดทั่วไป เมื่อราคาเบรกกรอบ High/Low 20 แท่งและทำการ Retest ยืนโซน รายย่อยมักแห่เปิด **BUY/SELL ตามเทรนด์** แต่ในโครงสร้างจุลภาค (Market Microstructure) ของทองคำบนแท่ง M1:
+ตามทฤษฎีการเทรดทั่วไป เมื่อราคาทะลุแนวรับ-แนวต้าน 20 แท่งและเกิดแท่งคอนเฟิร์มยืนโซน รายย่อยมักแห่เปิด **BUY/SELL ตามโมเมนตัม** แต่ในโครงสร้างจุลภาค (Market Microstructure) ของตลาดทองคำ M1:
 
-1. **ธรรมชาติของ M1 คือ Fakeout > 70%:** การเบรกส่วนใหญ่บนแท่ง 1 นาที เป็นเพียงการ "กวาดสภาพคล่อง (Liquidity Hunt)" ของรายใหญ่ ไม่ใช่เทรนด์จริง
-2. **กลไกการดักจับของ V23 (Liquidity Fade Engine):**
-   * เมื่อเกิดสัญญาณเบรกบนแล้วชะลอตัว $\rightarrow$ **V23 เปิด SELL** ดักจับจังหวะเทกลับเข้ากรอบ
-   * เมื่อเกิดสัญญาณเบรกล่างแล้วชะลอตัว $\rightarrow$ **V23 เปิด BUY** ดักจับจังหวะดีดกลับเข้าสู่สมดุล
+1. **ธรรมชาติของ M1 คือ Fakeout > 70%:** การเบรกกรอบส่วนใหญ่เป็นเพียง "การกวาดสภาพคล่อง (Stop Hunt / Liquidity Sweep)" เพื่อเติมออเดอร์ของสถาบันใหญ่ ไม่ใช่เทรนด์ต่อเนื่องระยะยาว
+2. **กลไกการล่าของ Aegis Predator:**
+   * เมื่อเกิดสัญญาณเบรกทะลุแนวต้านบนแล้วชะลอตัว $\rightarrow$ **Aegis Predator ดักเปิด SELL** ดักสับคนติดดอย เก็บกำไรจังหวะราคาทุบกลับเข้ากรอบ
+   * เมื่อเกิดสัญญาณหลุดแนวรับล่างแล้วชะลอตัว $\rightarrow$ **Aegis Predator ดักเปิด BUY** ดักช้อนจังหวะราคาดีดกลับเข้าสู่จุดสมดุล
 3. **ความได้เปรียบทางคณิตศาสตร์ (Positive Expectancy):**
-   * เวลาแพ้: โดนตัดขาดทุนสั้นๆ ที่ $1.5\times$ ATR (~$2.50 – $3.50)
-   * เวลาชนะ: ราคาวิ่งทุบกลับเข้ากรอบ ชนเป้ากำไร 2.0R (~$5.50 – $11.50)
-   * แม้อัตราชนะเพียง 40% แต่ค่าเฉลี่ยกำไรโตเป็น 2 เท่าของผลขาดทุน ทำให้พอร์ตเติบโตอย่างมั่นคง
+   * เวลาเสีย: ตัดขาดทุนสั้น $1.5\times$ ATR (~$2.50 – $3.50)
+   * เวลาได้: รันกำไรชนเป้า 2.0R (~$5.50 – $11.50)
+   * แม้อัตราชนะจะอยู่ที่ ~41% แต่ด้วยอัตรากำไรโตเป็น 2 เท่าของการตัดขาดทุน ทำให้พอร์ตเติบโตอย่างก้าวกระโดด
 
 ---
 
-## 3. สถาปัตยกรรมและการควบคุมความเสี่ยง (Risk Management)
+## 3. สถาปัตยกรรมและการควบคุมความเสี่ยง (Institutional Risk Controls)
 
-| มาตรการความปลอดภัย | การตั้งค่า | รายละเอียดการทำงาน |
+| ระบบควบคุม | พารามิเตอร์ | รายละเอียดการทำงาน |
 |---|---|---|
-| **Strategy Mode** | Liquidity Fade | ดักจับการทะลุหลอกและดึงราคากลับเข้ากรอบ Mean Reversion |
-| **Execution Mode** | `InpEnableSessionGuard = false` | โหมด 24 ชั่วโมง เทรดได้ต่อเนื่องทั้งวันเมื่อมี Setup เกิดขึ้น |
+| **Strategy Core** | `InpFadeBreakouts = true` | ดักเก็บสภาพคล่องจากการทะลุหลอก (Liquidity Sweep Fade) |
+| **Execution Window** | `InpEnableSessionGuard = false` | โหมด 24H Full-Alpha เทรดต่อเนื่องทุกช่วงเวลาเมื่อเกิด Setup คุณภาพ |
 | **Circuit Breaker** | `InpEnableCircuitBreaker = true` | **หยุดพักอัตโนมัติ 90 นาที** เมื่อแพ้ติดกัน 4 ไม้ (`MaxLosses = 4`) ป้องกันช่วงตลาดมี Super-Trend ข่าวสงคราม |
-| **Max 1 Position** | `HasOpenPosition()` | ถือได้ครั้งละ 1 ไม้เท่านั้น ไม่เบิ้ล ไม่ Grid ไม่ Martingale |
-| **Emergency Hard SL** | `InpEnableHardSL = true` | ส่งคำสั่ง Stop Loss ฝั่งเซิร์ฟเวอร์โบรกเกอร์ทันทีทุกไม้ กันระบบหลุด/ไฟดับ |
-| **Time-Based Exit** | `InpMaxHoldBars = 60` | หากถือออเดอร์ครบ 60 แท่ง M1 (1 ชั่วโมง) แล้วยังไม่ชน TP/SL บอทจะ Cut ทันที |
+| **Single Exposure** | `HasOpenPosition()` | จำกัดการถือครองครั้งละ 1 ไม้เท่านั้น ไม่เบิ้ล ไม่เบิ้ลล็อต ไม่ Grid ไม่ Martingale |
+| **Broker-Side Hard SL** | `InpEnableHardSL = true` | ส่งคำสั่ง Stop Loss ฝั่งเซิร์ฟเวอร์โบรกเกอร์ทันทีทุกไม้ ป้องกันความเสี่ยงเซิร์ฟเวอร์หรืออินเทอร์เน็ตขัดข้อง |
+| **Time Decay Exit** | `InpMaxHoldBars = 60` | หากถือออเดอร์ครบ 60 แท่ง M1 (1 ชั่วโมง) แล้วไม่ชน TP/SL บอทจะปิดทำกำไร/ตัดขาดทุนทันที |
 
 ---
 
-## 4. โครงสร้างโฟลเดอร์ของโปรเจกต์ (Project Structure)
+## 4. โครงสร้างโปรเจกต์ (Clean Project Architecture)
 
-โปรเจกต์จัดโครงสร้างแบบ Clean Architecture โดยแสดงเฉพาะเวอร์ชันหลักที่ใช้งานจริงไว้ที่ Root:
+โครงสร้างโฟลเดอร์ถูกจัดระเบียบให้แสดงเฉพาะโมเดลหลักที่ใช้งานจริงไว้ที่ Root:
 
 ```text
 trader-bot/
-├── QuantumTitan_v23_LondonRetestBreakout.mq5   # [ACTIVE] ซอร์สโค้ด EA หลักเวอร์ชัน 23
-├── QuantumTitan_v23_LondonRetestBreakout.ex5   # [ACTIVE] ไบนารีคอมไพล์พร้อมใช้งาน
-├── README.md                                   # คู่มือและเอกสารสรุปผลงาน
+├── AegisPredator.mq5                           # [ACTIVE] ซอร์สโค้ด EA หลัก Aegis Predator
+├── AegisPredator.ex5                           # [ACTIVE] ไบนารีคอมไพล์พร้อมใช้งาน
+├── README.md                                   # เอกสารภาพรวม สถิติ และคู่มือการใช้งาน
 ├── AGENTS.md / GEMINI.md                       # ข้อกำหนดและโหมดการทำงานของ Agent
-├── versions/                                   # โฟลเดอร์เก็บเวอร์ชันเก่าและชุดทดลองย้อนหลัง
-│   ├── QuantumTitan_v9_Singularity.*           # V9 สถาปัตยกรรมโมดูล
-│   ├── QuantumTitan_v10_Singularity.*          # V10 Stress test
-│   ├── QuantumTitan_v11_Singularity.*          # V11 HUD Dashboard
-│   ├── QuantumTitan_v12_Singularity.*          # V12 Multi-Timeframe
-│   ├── QuantumTitan_v13_Singularity.*          # V13 Macro Brain
-│   ├── QuantumTitan_v14_Apex.*                 # V14 8-Factor Confluence
-│   ├── QuantumTitan_v15_Apex.*                 # V15 Fast Scalper
-│   ├── QuantumTitan_v16_*                      # V16 M1 Precision / State Transition
-│   ├── QuantumTitan_v17 - v22_*                # V17-V22 Precision & Swing Research
-│   ├── QuantumTitan_v25_*                      # V25 Forward Gate Experiments
+├── versions/                                   # โฟลเดอร์จัดเก็บเวอร์ชันเก่า (V9 – V23, V25)
+│   ├── QuantumTitan_v23_LondonRetestBreakout.* # V23 (ต้นแบบสถาปัตยกรรม Circuit Breaker)
+│   ├── QuantumTitan_v16 - v22_*                # โมเดลวิจัยก่อนหน้า
 │   └── logs/                                   # บันทึกการคอมไพล์ของเวอร์ชันเก่า
-├── docs/                                       # เอกสารเชิงลึก, บทวิเคราะห์, และภาพประกอบ
-│   └── V23_CANDIDATE_VERIFICATION_REPORT.md    # รายงานการตรวจสอบ Candidate V23
-├── scripts/                                    # สคริปต์อัตโนมัติสำหรับการ Deploy และตรวจสอบ
-│   ├── deploy_v23_vm.py                        # สคริปต์ติดตั้งและอัปเดตบอทขึ้น VM อัตโนมัติ
+├── docs/                                       # เอกสารการทดสอบเชิงลึก และภาพแคปเจอร์
+├── scripts/                                    # สคริปต์อัตโนมัติสำหรับการ Deploy และมอนิเตอร์ VM
+│   ├── deploy_aegis_vm.py                      # ติดตั้งและรีสตาร์ต Aegis Predator บน VM
 │   ├── run_remote_stats.py                     # คำนวณสถิติ Win Rate และ PnL จาก VM สด
 │   └── compile.ps1                             # สคริปต์คอมไพล์ผ่าน MetaEditor CLI
-├── research/                                   # โมเดลค้นคว้า Quant Research & Alpha Search
-└── tests/                                      # ชุดทดสอบ Unit Tests ด้วย Pytest
+├── research/                                   # งานวิจัยเชิงปริมาณ (Quant Research)
+└── tests/                                      # ชุดทดสอบระบบอัตโนมัติ
 ```
 
 ---
@@ -90,19 +81,19 @@ trader-bot/
 ### 1) การคอมไพล์ซอร์สโค้ด
 ใช้ PowerShell สั่งรันคอมไพล์ผ่าน MetaEditor:
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/compile.ps1 QuantumTitan_v23_LondonRetestBreakout
+powershell -ExecutionPolicy Bypass -File scripts/compile.ps1 AegisPredator
 ```
 
 ### 2) การติดตั้งบน MetaTrader 5
-1. คัดลอก `QuantumTitan_v23_LondonRetestBreakout.ex5` ไปไว้ที่โฟลเดอร์ `MQL5/Experts/`
+1. คัดลอก `AegisPredator.ex5` ไปไว้ที่โฟลเดอร์ `MQL5/Experts/`
 2. เปิดชาร์ต **XAUUSD** กรอบเวลา **M1**
 3. ลาก EA ลงบนชาร์ต และตั้งค่าพารามิเตอร์:
    * `InpEnableSessionGuard = false` (รัน 24 ชั่วโมง)
    * `InpEnableCircuitBreaker = true` (เปิดระบบตัดวงจรความเสี่ยง)
-   * `InpLotSize = 0.01` (หรือ 0.02 ตามขนาดพอร์ต)
+   * `InpLotSize = 0.01` (หรือคำนวณตามขนาดพอร์ต)
 4. เปิดปุ่ม **Algo Trading** บนแถบเครื่องมือของ MT5
 
 ---
 
-## 6. ลิขสิทธิ์และข้อจำกัดความรับผิดชอบ (Disclaimer)
-ระบบนี้สร้างขึ้นเพื่อการศึกษาและการวิจัยเชิงปริมาณ (Quantitative Research) ตลาดอนุพันธ์มีความเสี่ยงสูง ควรทดสอบบนบัญชีทดลอง (Demo Account) จนมั่นใจก่อนใช้งานด้วยเงินทุนจริง
+## 6. ข้อจำกัดความรับผิดชอบ (Disclaimer)
+ระบบนี้พัฒนาขึ้นเพื่อการวิจัยและการศึกษาเชิงปริมาณ ตลาดอนุพันธ์และทองคำมีความผันผวนสูง ควรทดสอบบนบัญชีจำลอง (Demo Account) จนเข้าใจพฤติกรรมของระบบอย่างถี่ถ้วนก่อนพิจารณาใช้งาน
