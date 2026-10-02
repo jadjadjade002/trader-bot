@@ -1,11 +1,11 @@
-# QuantumTitan V23 — London Retest Breakout (Inverted Edition)
+# QuantumTitan V23 — Liquidity Retest Fade (LRF Engine)
 
 [![Platform](https://img.shields.io/badge/Platform-MetaTrader%205-blue.svg)](https://www.metatrader5.com/)
 [![Language](https://img.shields.io/badge/Language-MQL5-orange.svg)](https://www.mql5.com/)
 [![Asset](https://img.shields.io/badge/Asset-XAUUSD%20(Gold)-gold.svg)]()
 [![Status](https://img.shields.io/badge/Live%20Status-Active%20%2B130%25%2B-brightgreen.svg)]()
 
-ระบบเทรดอัตโนมัติ MetaTrader 5 (MQL5) ระดับ Quantitative สำหรับสินทรัพย์ **XAUUSD (Gold)** บนกรอบเวลา **M1** ทำงานด้วยกลยุทธ์ **Donchian Retest Breakout แบบกลับทางสัญญาณ (Inverted Signals)** เพื่อดักกินสภาพคล่อง (Liquidity Sweeps) และการทะลุหลอก (False Breakouts) ของรายย่อย พร้อมระบบ **Consecutive Loss Circuit Breaker** ตัดวงจรความเสี่ยงอัตโนมัติ
+ระบบเทรดอัตโนมัติ MetaTrader 5 (MQL5) ระดับ Quantitative สำหรับสินทรัพย์ **XAUUSD (Gold)** บนกรอบเวลา **M1** ทำงานด้วยกลยุทธ์ **Donchian False Breakout Fade (Liquidity Sweep Reversal)** เพื่อดักจับสภาพคล่อง (Liquidity Sweeps) และการทะลุหลอก (False Breakouts) ของรายย่อย พร้อมระบบ **Consecutive Loss Circuit Breaker** ตัดวงจรความเสี่ยงอัตโนมัติ
 
 ---
 
@@ -23,14 +23,14 @@
 
 ---
 
-## 2. ทำไมการกลับสัญญาณ (Invert) ถึงสร้างกำไรมหาศาล?
+## 2. ทำไมกลยุทธ์ Liquidity Fade ถึงสร้างกำไรสูงใน M1?
 
-ตามตำราเทรดทั่วไป เมื่อราคาเบรกกรอบ High/Low 20 แท่งและทำการ Retest ยืนโซน รายย่อยจะแห่เปิด **BUY/SELL ตามเทรนด์** แต่ในโครงสร้างตลาดจริงของทองคำบนแท่ง M1:
+ตามตำราเทรดทั่วไป เมื่อราคาเบรกกรอบ High/Low 20 แท่งและทำการ Retest ยืนโซน รายย่อยมักแห่เปิด **BUY/SELL ตามเทรนด์** แต่ในโครงสร้างจุลภาค (Market Microstructure) ของทองคำบนแท่ง M1:
 
 1. **ธรรมชาติของ M1 คือ Fakeout > 70%:** การเบรกส่วนใหญ่บนแท่ง 1 นาที เป็นเพียงการ "กวาดสภาพคล่อง (Liquidity Hunt)" ของรายใหญ่ ไม่ใช่เทรนด์จริง
-2. **การทำงานของ V23 Inverted (`InpInvertSignals = true`):**
-   * กราฟเบรกบน ยืนโซน (คนอื่นเปิด BUY) $\rightarrow$ **V23 เปิด SELL**
-   * กราฟเบรกล่าง หลุดโซน (คนอื่นเปิด SELL) $\rightarrow$ **V23 เปิด BUY**
+2. **กลไกการดักจับของ V23 (Liquidity Fade Engine):**
+   * เมื่อเกิดสัญญาณเบรกบนแล้วชะลอตัว $\rightarrow$ **V23 เปิด SELL** ดักจับจังหวะเทกลับเข้ากรอบ
+   * เมื่อเกิดสัญญาณเบรกล่างแล้วชะลอตัว $\rightarrow$ **V23 เปิด BUY** ดักจับจังหวะดีดกลับเข้าสู่สมดุล
 3. **ความได้เปรียบทางคณิตศาสตร์ (Positive Expectancy):**
    * เวลาแพ้: โดนตัดขาดทุนสั้นๆ ที่ $1.5\times$ ATR (~$2.50 – $3.50)
    * เวลาชนะ: ราคาวิ่งทุบกลับเข้ากรอบ ชนเป้ากำไร 2.0R (~$5.50 – $11.50)
@@ -42,7 +42,7 @@
 
 | มาตรการความปลอดภัย | การตั้งค่า | รายละเอียดการทำงาน |
 |---|---|---|
-| **Invert Direction** | `InpInvertSignals = true` | สลับสัญญาณซื้อขายเพื่อดักจับ Liquidity Reversal |
+| **Strategy Mode** | Liquidity Fade | ดักจับการทะลุหลอกและดึงราคากลับเข้ากรอบ Mean Reversion |
 | **Execution Mode** | `InpEnableSessionGuard = false` | โหมด 24 ชั่วโมง เทรดได้ต่อเนื่องทั้งวันเมื่อมี Setup เกิดขึ้น |
 | **Circuit Breaker** | `InpEnableCircuitBreaker = true` | **หยุดพักอัตโนมัติ 90 นาที** เมื่อแพ้ติดกัน 4 ไม้ (`MaxLosses = 4`) ป้องกันช่วงตลาดมี Super-Trend ข่าวสงคราม |
 | **Max 1 Position** | `HasOpenPosition()` | ถือได้ครั้งละ 1 ไม้เท่านั้น ไม่เบิ้ล ไม่ Grid ไม่ Martingale |
@@ -74,8 +74,7 @@ trader-bot/
 │   ├── QuantumTitan_v25_*                      # V25 Forward Gate Experiments
 │   └── logs/                                   # บันทึกการคอมไพล์ของเวอร์ชันเก่า
 ├── docs/                                       # เอกสารเชิงลึก, บทวิเคราะห์, และภาพประกอบ
-│   ├── V23_CANDIDATE_VERIFICATION_REPORT.md    # รายงานการตรวจสอบ Candidate V23
-│   └── screenshots/                            # ภาพถ่ายบันทึกการทำงานบนเซิร์ฟเวอร์
+│   └── V23_CANDIDATE_VERIFICATION_REPORT.md    # รายงานการตรวจสอบ Candidate V23
 ├── scripts/                                    # สคริปต์อัตโนมัติสำหรับการ Deploy และตรวจสอบ
 │   ├── deploy_v23_vm.py                        # สคริปต์ติดตั้งและอัปเดตบอทขึ้น VM อัตโนมัติ
 │   ├── run_remote_stats.py                     # คำนวณสถิติ Win Rate และ PnL จาก VM สด
@@ -98,7 +97,6 @@ powershell -ExecutionPolicy Bypass -File scripts/compile.ps1 QuantumTitan_v23_Lo
 1. คัดลอก `QuantumTitan_v23_LondonRetestBreakout.ex5` ไปไว้ที่โฟลเดอร์ `MQL5/Experts/`
 2. เปิดชาร์ต **XAUUSD** กรอบเวลา **M1**
 3. ลาก EA ลงบนชาร์ต และตั้งค่าพารามิเตอร์:
-   * `InpInvertSignals = true` (กลับทางสัญญาณ)
    * `InpEnableSessionGuard = false` (รัน 24 ชั่วโมง)
    * `InpEnableCircuitBreaker = true` (เปิดระบบตัดวงจรความเสี่ยง)
    * `InpLotSize = 0.01` (หรือ 0.02 ตามขนาดพอร์ต)
