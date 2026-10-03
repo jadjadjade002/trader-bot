@@ -15,7 +15,8 @@ def ssh(cmd):
 script = """
 from pathlib import Path
 root = Path('/home/ubuntu/.wine/drive_c/Program Files/MetaTrader 5 V16.59 V22 New Demo/MQL5/logs')
-mql_file = sorted(root.glob('20261002.log'))[-1]
+mql_file = sorted(root.glob('*.log'))[-1]
+print('Reading file:', mql_file.name)
 lines = open(mql_file, encoding='utf-16-le', errors='ignore').readlines()
 print('Total lines:', len(lines))
 for l in lines[-10:]:

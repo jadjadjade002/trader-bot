@@ -1,6 +1,7 @@
 import os
 import subprocess
 import paramiko
+import base64
 
 SSH_HOST = "161.118.255.178"
 SSH_USER = "ubuntu"
@@ -59,8 +60,8 @@ stops_color=5264367
 windows_total=1
 
 <expert>
-name=AegisPredator
-path=Experts\\AegisPredator.ex5
+name=AegisPredator_v23
+path=Experts\\AegisPredator_v23.ex5
 expertmode=1
 <inputs>
 InpEnableSessionGuard=false
@@ -119,10 +120,10 @@ print(f"Generated {local_chr} successfully.")
 
 # SCP upload to VM
 key_path = os.path.abspath(SSH_KEY)
-ex5_local = "AegisPredator.ex5"
-mq5_local = "AegisPredator.mq5"
+ex5_local = "AegisPredator_v23.ex5"
+mq5_local = "AegisPredator_v23.mq5"
 
-print("Uploading Aegis Predator binary, source, and chart configs via SFTP...")
+print("Uploading Aegis Predator V23 binary, source, and chart configs via SFTP...")
 k = paramiko.RSAKey.from_private_key_file(key_path)
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -131,9 +132,9 @@ sftp = ssh.open_sftp()
 
 # Upload ex5 and mq5 to Experts folder
 remote_experts = f"{REMOTE_BASE}/MQL5/Experts"
-sftp.put(ex5_local, f"{remote_experts}/AegisPredator.ex5")
-sftp.put(mq5_local, f"{remote_experts}/AegisPredator.mq5")
-print("Uploaded AegisPredator.ex5 and AegisPredator.mq5.")
+sftp.put(ex5_local, f"{remote_experts}/AegisPredator_v23.ex5")
+sftp.put(mq5_local, f"{remote_experts}/AegisPredator_v23.mq5")
+print("Uploaded AegisPredator_v23.ex5 and AegisPredator_v23.mq5.")
 
 # Upload chart01.chr to both MQL5/Profiles and Profiles
 sftp.put(local_chr, f"{REMOTE_BASE}/MQL5/Profiles/Charts/Default/chart01.chr")
@@ -143,7 +144,7 @@ print("Uploaded chart01.chr to both profiles.")
 sftp.close()
 
 # Graceful restart of MT5 process
-import base64
+print("Restarting MT5 terminal on VM...")
 py_restart = f"""
 import subprocess, os, time
 subprocess.run(['pkill', '-9', '-f', 'MetaTrader 5 V16.59 V22 New Demo'])
@@ -170,4 +171,4 @@ if errors:
 ssh.close()
 if os.path.exists(local_chr):
     os.remove(local_chr)
-print("Deployment completed.")
+print("Deployment of Aegis Predator V23 completed.")

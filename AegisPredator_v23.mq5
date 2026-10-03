@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
-//|                                              AegisPredator.mq5   |
+//|                                          AegisPredator_v23.mq5   |
 //|                                  Copyright 2026, Quant Architect |
-//|          Aegis Predator - Institutional Liquidity Engine         |
+//|       Aegis Predator V23 - Institutional Liquidity Engine        |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, Quant Architect"
 #property link      "https://github.com/jadjadjade002/trader-bot"
-#property version   "1.00"
-#property description "Aegis Predator: Institutional False Breakout Liquidity Engine on XAUUSD M1."
+#property version   "23.00"
+#property description "Aegis Predator V23: Institutional False Breakout Liquidity Engine on XAUUSD M1."
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -119,7 +119,7 @@ int OnInit()
    ChartSetInteger(0, CHART_SHOW_VOLUMES, CHART_VOLUME_TICK);
    ChartRedraw(0);
 
-   PrintFormat("Aegis Predator INITIALIZED. Symbol=%s Magic=%I64u Window=%s Lot=%.2f SpreadGuard=%s FadeBreakouts=%s CircuitBreaker=%s",
+   PrintFormat("Aegis Predator V23 INITIALIZED. Symbol=%s Magic=%I64u Window=%s Lot=%.2f SpreadGuard=%s FadeBreakouts=%s CircuitBreaker=%s",
                _Symbol, InpMagicNumber, 
                InpEnableSessionGuard ? StringFormat("%d:00-%d:00", InpStartHour, InpEndHour) : "ALL_HOURS (24H)",
                InpLotSize, 
@@ -139,7 +139,7 @@ void OnDeinit(const int reason)
       IndicatorRelease(atrHandle);
       atrHandle = INVALID_HANDLE;
    }
-   Print("Aegis Predator deinitialized. Reason: ", reason);
+   Print("Aegis Predator V23 deinitialized. Reason: ", reason);
 }
 
 //+------------------------------------------------------------------+
@@ -157,7 +157,7 @@ void ManageOpenPositions()
 
       if(heldBars >= InpMaxHoldBars)
       {
-         PrintFormat("AegisPredator TIME EXIT: Ticket=%I64u held_bars=%d >= %d. Closing position.",
+         PrintFormat("AegisPredator V23 TIME EXIT: Ticket=%I64u held_bars=%d >= %d. Closing position.",
                      posInfo.Ticket(), heldBars, InpMaxHoldBars);
          trade.PositionClose(posInfo.Ticket());
       }
@@ -232,7 +232,7 @@ bool IsCircuitBreakerActive()
    {
       lastBreakerDealTicket = latestOutTicket;
       cooldownUntil = TimeCurrent() + (InpCooldownMinutes * 60);
-      PrintFormat("AegisPredator CIRCUIT BREAKER TRIGGERED: %d consecutive losses. Pausing trading for %d min until %s",
+      PrintFormat("AegisPredator V23 CIRCUIT BREAKER TRIGGERED: %d consecutive losses. Pausing trading for %d min until %s",
                   losses, InpCooldownMinutes, TimeToString(cooldownUntil, TIME_DATE|TIME_MINUTES));
       return true;
    }
@@ -282,7 +282,7 @@ void OnTick()
    // Check Spread Gate
    if(InpEnableSpreadGuard && currentSpread > InpMaxSpreadPts)
    {
-      PrintFormat("AegisPredator SPREAD BLOCK: Spread %d > %d", currentSpread, InpMaxSpreadPts);
+      PrintFormat("AegisPredator V23 SPREAD BLOCK: Spread %d > %d", currentSpread, InpMaxSpreadPts);
       return;
    }
 
@@ -365,10 +365,10 @@ void OnTick()
 
       if(InpEnableMarginGuard && !CheckMargin(ORDER_TYPE_BUY, InpLotSize, ask)) return;
 
-      PrintFormat("AegisPredator BUY SIGNAL: Ask=%.2f SL=%.2f (HardSL=%d dist=%.2f) TP=%.2f (2.0R) Spread=%d",
+      PrintFormat("AegisPredator V23 BUY SIGNAL: Ask=%.2f SL=%.2f (HardSL=%d dist=%.2f) TP=%.2f (2.0R) Spread=%d",
                   ask, sl, InpEnableHardSL, slDistance, tp, currentSpread);
       
-      if(trade.Buy(InpLotSize, _Symbol, ask, sl, tp, "AegisPredator Buy"))
+      if(trade.Buy(InpLotSize, _Symbol, ask, sl, tp, "AegisPredator V23 Buy"))
       {
          PrintFormat("BUY ORDER PLACED. Ticket=%I64u", trade.ResultOrder());
       }
@@ -387,10 +387,10 @@ void OnTick()
 
       if(InpEnableMarginGuard && !CheckMargin(ORDER_TYPE_SELL, InpLotSize, bid)) return;
 
-      PrintFormat("AegisPredator SELL SIGNAL: Bid=%.2f SL=%.2f (HardSL=%d dist=%.2f) TP=%.2f (2.0R) Spread=%d",
+      PrintFormat("AegisPredator V23 SELL SIGNAL: Bid=%.2f SL=%.2f (HardSL=%d dist=%.2f) TP=%.2f (2.0R) Spread=%d",
                   bid, sl, InpEnableHardSL, slDistance, tp, currentSpread);
 
-      if(trade.Sell(InpLotSize, _Symbol, bid, sl, tp, "AegisPredator Sell"))
+      if(trade.Sell(InpLotSize, _Symbol, bid, sl, tp, "AegisPredator V23 Sell"))
       {
          PrintFormat("SELL ORDER PLACED. Ticket=%I64u", trade.ResultOrder());
       }

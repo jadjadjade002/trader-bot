@@ -1,9 +1,9 @@
-# Aegis Predator — Institutional False Breakout Liquidity Engine
+# Aegis Predator V23 — Institutional False Breakout Liquidity Engine
 
 [![Platform](https://img.shields.io/badge/Platform-MetaTrader%205-blue.svg)](https://www.metatrader5.com/)
 [![Language](https://img.shields.io/badge/Language-MQL5-orange.svg)](https://www.mql5.com/)
 [![Asset](https://img.shields.io/badge/Asset-XAUUSD%20(Gold)-gold.svg)]()
-[![Status](https://img.shields.io/badge/Live%20Status-Active%20%2B146%25-brightgreen.svg)]()
+[![Status](https://img.shields.io/badge/Live%20Status-Active%20%2B143%25-brightgreen.svg)]()
 
 ระบบเทรดอัตโนมัติ MetaTrader 5 (MQL5) สถาปัตยกรรม Quantitative ขั้นสูงสำหรับสินทรัพย์ **XAUUSD (Gold)** บนกรอบเวลา **M1** ทำงานด้วยกลยุทธ์ **Donchian False Breakout Fade (Liquidity Sweep Reversal)** ดักจับสภาพคล่อง (Liquidity Hunts) และการทะลุหลอก (Trap Breakouts) ของรายย่อย พร้อมระบบ **Consecutive Loss Circuit Breaker** ตัดวงจรความเสี่ยงอัตโนมัติ
 
@@ -14,11 +14,11 @@
 บอทถูกติดตั้งและรันสดบนบัญชีจริงจำลอง (Demo Account `5056497798`, Server: `MetaQuotes-Demo`, เลเวอเรจ 1:200):
 
 * **เงินทุนตั้งต้น (Initial Deposit):** $70.00 USD (25 ก.ย. 2026)
-* **ยอดบาลานซ์ปัจจุบัน (Current Balance):** **$172.36 USD**
-* **กำไรสุทธิสะสม (Net PnL):** **+$102.36 USD (+146.2%)**
-* **อัตราชนะ (Win Rate):** **40.9%**
+* **ยอดบาลานซ์ปัจจุบัน (Current Balance):** **$170.24 USD**
+* **กำไรสุทธิสะสม (Net PnL):** **+$100.24 USD (+143.2%)**
+* **อัตราชนะ (Win Rate):** **40.5%** (ชนะ 45 / แพ้ 66)
 * **อัตราส่วนผลตอบแทนต่อความเสี่ยง (Risk:Reward):** **1 : 2.0 (2.0R Asymmetric Payoff)**
-* **จำนวนไม้ที่ปิดรอบแล้ว (Closed Roundtrips):** **110 ไม้**
+* **จำนวนไม้ที่ปิดรอบแล้ว (Closed Roundtrips):** **111 ไม้**
 * **สถานะความปลอดภัย (Circuit Breaker):** ทำงานสมบูรณ์ (ตัดพักความเสี่ยง 90 นาทีอัตโนมัติเมื่อชน 4 ไม้เสียติดกัน)
 
 ---
@@ -28,9 +28,9 @@
 ตามทฤษฎีการเทรดทั่วไป เมื่อราคาทะลุแนวรับ-แนวต้าน 20 แท่งและเกิดแท่งคอนเฟิร์มยืนโซน รายย่อยมักแห่เปิด **BUY/SELL ตามโมเมนตัม** แต่ในโครงสร้างจุลภาค (Market Microstructure) ของตลาดทองคำ M1:
 
 1. **ธรรมชาติของ M1 คือ Fakeout > 70%:** การเบรกกรอบส่วนใหญ่เป็นเพียง "การกวาดสภาพคล่อง (Stop Hunt / Liquidity Sweep)" เพื่อเติมออเดอร์ของสถาบันใหญ่ ไม่ใช่เทรนด์ต่อเนื่องระยะยาว
-2. **กลไกการล่าของ Aegis Predator:**
-   * เมื่อเกิดสัญญาณเบรกทะลุแนวต้านบนแล้วชะลอตัว $\rightarrow$ **Aegis Predator ดักเปิด SELL** ดักสับคนติดดอย เก็บกำไรจังหวะราคาทุบกลับเข้ากรอบ
-   * เมื่อเกิดสัญญาณหลุดแนวรับล่างแล้วชะลอตัว $\rightarrow$ **Aegis Predator ดักเปิด BUY** ดักช้อนจังหวะราคาดีดกลับเข้าสู่จุดสมดุล
+2. **กลไกการล่าของ Aegis Predator V23:**
+   * เมื่อเกิดสัญญาณเบรกทะลุแนวต้านบนแล้วชะลอตัว $\rightarrow$ **Aegis Predator V23 ดักเปิด SELL** ดักสับคนติดดอย เก็บกำไรจังหวะราคาทุบกลับเข้ากรอบ
+   * เมื่อเกิดสัญญาณหลุดแนวรับล่างแล้วชะลอตัว $\rightarrow$ **Aegis Predator V23 ดักเปิด BUY** ดักช้อนจังหวะราคาดีดกลับเข้าสู่จุดสมดุล
 3. **ความได้เปรียบทางคณิตศาสตร์ (Positive Expectancy):**
    * เวลาเสีย: ตัดขาดทุนสั้น $1.5\times$ ATR (~$2.50 – $3.50)
    * เวลาได้: รันกำไรชนเป้า 2.0R (~$5.50 – $11.50)
@@ -57,17 +57,17 @@
 
 ```text
 trader-bot/
-├── AegisPredator.mq5                           # [ACTIVE] ซอร์สโค้ด EA หลัก Aegis Predator
-├── AegisPredator.ex5                           # [ACTIVE] ไบนารีคอมไพล์พร้อมใช้งาน
+├── AegisPredator_v23.mq5                       # [ACTIVE] ซอร์สโค้ด EA หลัก Aegis Predator V23
+├── AegisPredator_v23.ex5                       # [ACTIVE] ไบนารีคอมไพล์พร้อมใช้งาน
 ├── README.md                                   # เอกสารภาพรวม สถิติ และคู่มือการใช้งาน
 ├── AGENTS.md / GEMINI.md                       # ข้อกำหนดและโหมดการทำงานของ Agent
-├── versions/                                   # โฟลเดอร์จัดเก็บเวอร์ชันเก่า (V9 – V23, V25)
-│   ├── QuantumTitan_v23_LondonRetestBreakout.* # V23 (ต้นแบบสถาปัตยกรรม Circuit Breaker)
+├── versions/                                   # โฟลเดอร์จัดเก็บเวอร์ชันเก่า (V9 – V23 เก่า, V25)
+│   ├── QuantumTitan_v23_LondonRetestBreakout.* # V23 (ต้นแบบแรกของสถาปัตยกรรม Circuit Breaker)
 │   ├── QuantumTitan_v16 - v22_*                # โมเดลวิจัยก่อนหน้า
 │   └── logs/                                   # บันทึกการคอมไพล์ของเวอร์ชันเก่า
 ├── docs/                                       # เอกสารการทดสอบเชิงลึก และภาพแคปเจอร์
 ├── scripts/                                    # สคริปต์อัตโนมัติสำหรับการ Deploy และมอนิเตอร์ VM
-│   ├── deploy_aegis_vm.py                      # ติดตั้งและรีสตาร์ต Aegis Predator บน VM
+│   ├── deploy_aegis_v23_vm.py                  # ติดตั้งและรีสตาร์ต Aegis Predator V23 บน VM
 │   ├── run_remote_stats.py                     # คำนวณสถิติ Win Rate และ PnL จาก VM สด
 │   └── compile.ps1                             # สคริปต์คอมไพล์ผ่าน MetaEditor CLI
 ├── research/                                   # งานวิจัยเชิงปริมาณ (Quant Research)
@@ -81,11 +81,11 @@ trader-bot/
 ### 1) การคอมไพล์ซอร์สโค้ด
 ใช้ PowerShell สั่งรันคอมไพล์ผ่าน MetaEditor:
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/compile.ps1 AegisPredator
+powershell -ExecutionPolicy Bypass -File scripts/compile.ps1 AegisPredator_v23
 ```
 
 ### 2) การติดตั้งบน MetaTrader 5
-1. คัดลอก `AegisPredator.ex5` ไปไว้ที่โฟลเดอร์ `MQL5/Experts/`
+1. คัดลอก `AegisPredator_v23.ex5` ไปไว้ที่โฟลเดอร์ `MQL5/Experts/`
 2. เปิดชาร์ต **XAUUSD** กรอบเวลา **M1**
 3. ลาก EA ลงบนชาร์ต และตั้งค่าพารามิเตอร์:
    * `InpEnableSessionGuard = false` (รัน 24 ชั่วโมง)
