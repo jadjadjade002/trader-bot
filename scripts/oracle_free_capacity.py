@@ -118,7 +118,8 @@ def main():
         volumes += oci.pagination.list_call_get_all_results(block.list_volumes, compartment).data
         for domain in ads:
             volumes += oci.pagination.list_call_get_all_results(
-                block.list_boot_volumes, domain.name, compartment).data
+                block.list_boot_volumes, availability_domain=domain.name,
+                compartment_id=compartment).data
     matching = [i for i in instances if i.display_name == NAME and i.lifecycle_state != "TERMINATED"]
     if len(matching) > 1:
         raise ValueError("Multiple matching instances: stop for manual review")
