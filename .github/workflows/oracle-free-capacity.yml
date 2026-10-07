@@ -1,0 +1,39 @@
+name: Oracle Always Free capacity
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: oracle-always-free-capacity
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: vars.ORACLE_WATCH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check -r scripts/oracle_watch_requirements.txt
+      - name: Check capacity and email on success
+        run: python scripts/oracle_free_capacity.py
+        env:
+          OCI_CONFIG_JSON: ${{ secrets.OCI_CONFIG_JSON }}
+          OCI_API_PRIVATE_KEY: ${{ secrets.OCI_API_PRIVATE_KEY }}
+          OCI_SSH_PUBLIC_KEY: ${{ secrets.OCI_SSH_PUBLIC_KEY }}
+          SMTP_USER: ${{ secrets.ORACLE_NOTIFY_EMAIL }}
+          SMTP_PASSWORD: ${{ secrets.ORACLE_NOTIFY_APP_PASSWORD }}
+          NOTIFY_TO: ${{ secrets.ORACLE_NOTIFY_EMAIL }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ORACLE_WORKFLOW_FILE: oracle-free-capacity.yml
