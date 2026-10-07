@@ -14,6 +14,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check -r scripts/oracle_watch_requirements.txt
+      - run: python -m unittest discover -s tests -p test_oracle_free_capacity.py -v
+      - name: Validate SDK launch storage model
+        run: >-
+          python -c "import oci;
+          source=oci.core.models.InstanceSourceViaImageDetails(image_id='validation-only',
+          boot_volume_size_in_gbs=50,boot_volume_vpus_per_gb=10);
+          assert source.boot_volume_size_in_gbs==50 and source.boot_volume_vpus_per_gb==10;
+          print('Oracle SDK model valid')"
   check:
     if: vars.ORACLE_WATCH_ENABLED == 'true'
     runs-on: ubuntu-latest
