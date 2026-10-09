@@ -1,0 +1,31 @@
+# R8 export recovery note
+
+`r8_a` control stopped at export, before treatments. Preserve its artifacts unchanged. Use `r8_b` as a rerun of the same frozen R8 protocol, with one export-only source change: the `OnTester` deal-history selection ends at `D'3000.12.31 23:59:59'` instead of `TimeCurrent()`. The online breaker/history queries remain unchanged.
+
+## Evidence and interpretation
+
+In `reports/v25_research_20261008_postupdate/runs/r8_a_r1_control/r8_a_r1_control.htm`, native tester HTML reports a final forced close at displayed tester time `2026.05.29 23:55:00`, deal 3595, profit `+0.02`. Final balance is `10808.43`, native net `808.43`, with1,797 positions. Do not interpret displayed tester time as verified UTC or infer a broker timezone. `r8_a_r1_control_spec.csv` records `last_tick=1780095599927` (numeric broker-coded clock formatted as2026-05-29 22:59:59.927). Formatting this integer using a UTC formatter does not establish the broker's real timezone. This explicit spec field, not a presumed raw-CSV tail, is the quote boundary used here. Exported `r8_a_r1_control_deals.csv` includes open position/deal3594 but has no close deal3595. CSV has3,594 data rows including one deposit, therefore3,593 economic deals versus native3,594. `failure.json` is a retrospectively labeled diagnostic of the Python `Unclosed position at export` failure, native net `808.43`, and incomplete closed-position net `808.41`. It is not a native journal message. `journal_10.txt` contains the tester's forced close at23:55.
+
+Observed: native HTML/account balance includes end-of-test close 3595, while the deals export stops with 3594 open; the recorded last tick is earlier than the native close. This establishes an export-window mismatch. It does not establish that `OnTester` ran before liquidation, that server history exposed the close late, or that the native close timestamp is UTC. The hypothesized cause is the export `HistorySelect` upper bound using `TimeCurrent()`, which may precede the tester's native end-of-test close. The later endpoint is intended to include the close; only a native rerun can establish recovery. The missing `+0.02` explains the difference between native `808.43` and incomplete closed-net `808.41`; neither incomplete export nor that reconciliation is an accepted economic reference.
+
+## Frozen rerun contract
+
+- Prefix `r8_b`; same approved evidence root, runtime/cache, input set, R8 mode/presets/factors, costs, controls, and qualification gates as `r8_a`.
+- Only source delta: `OnTester`'s export `HistorySelect` end bound. No signal, execution, gate, or online history change.
+- Keep `r8_a` intact. Do not compare its incomplete export as a valid economic control; rerun parity/control and treatments in `r8_b` under the existing protocol.
+- Recovery succeeds only if native export no longer flags `Unclosed position at export`, final close appears consistently in deal/position/equity outputs, and all existing completeness/parity checks pass. Failure means stop and investigate export evidence; do not tune strategy or relax gates.
+- Generator/unit tests establish source transformation and frozen-handler invariants only. They do not establish MQL compilation or native tester recovery.
+
+The root-reported clean compile hashes are clone EX5 `2F59FC1F06CDAFF468F137ACF650C4198CE4BDB68CC6962551CFEBDBC46535CE` (1,424 ms) and R8 EX5 `54693E177FE0FA56CBB4D436AB70796D73D364B8C0A0F32B16667A54ABF27E03` (1,213 ms). These compile results do not establish native export recovery or qualification.
+
+Independent Luna review of actual generated source/adapter/runner found no blocker to bounded execution. Reviewer ran58 focused tests. Main ran302 affected tests plus143 subtests, all passed. No complete repository-suite claim. Fixture exemption applies only to the identical-behavior reporting clone, which has no new signal fixtures. R8 still requires27 actual MQL fixtures. Exact export count, position, profit, balance, parity and environment acceptance remain mandatory. No native recovery result was inspected at preregistration.
+
+API basis: [`HistorySelect` selects deals/orders for the specified server-time interval](https://www.mql5.com/en/docs/trading/historyselect); [MQL5 `datetime` literals support dates through December 31, 3000](https://www.mql5.com/en/docs/basis/types/integer/datetime). This supports the chosen representable upper bound, not the claim that a native run will export correctly.
+
+## Accounting amendment, still before treatment outcomes
+
+The extended query in `r8_b_r1_control` did capture native close3595. MT5 emitted magic0/reason0/comment `end of test` for this system liquidation, so the default parser correctly rejected it as foreign. Its failed directory and native evidence remain unaccepted. A read-only independent audit and main replay of its preserved artifacts reconcile1,797 positions/net$808.43/3,594 economic deals, including the unchanged magic0 row.
+
+Add one opt-in, per-run terminal-close verifier for the two reviewed R8 sources only. Require exactly one final zero-magic trade exit, full opposite-side volume of the sole matching owned position, original comment/reason, exact CSV/HTML economics and ticket/order/time, both native position-liquidation and deal/order journal evidence, last quote before close, displayed broker-calendar close before requested end, one initial deposit, native deal/position/net/balance reconciliation. Default parser still rejects foreign magic. Preserve raw magic0/reason0, never synthesize a close, rewrite ownership, discard a loss or change a predicate. Duplicate identical journal copies occur in Core and Trade exports and are allowed only if every matching value agrees. Conflicting copies reject.
+
+Run the existing bounded retry for the failed control, `r8_b_r1_control_retry1`, with identical source/binary/runtime/cache/settings economics and new unique run tag. Propagate its returned actual evidence ID into exact off/off parity. No accepted record is overwritten. All three treatments remain unrun until both controls pass. This amendment changes accounting verification, not the earlier fixed hypotheses or thresholds. Native rerun and independent outcome audit remain required.

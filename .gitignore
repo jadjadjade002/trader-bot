@@ -25,6 +25,7 @@ compile.log
 .mt5-v18.local/
 .mt5-v19.local/
 .mt5-v20.local/
+.mt5-v23-tuning.local/
 /.mt5-v2167.local/
 /.mt5-v16_1.local/
 /.deploy_*/
@@ -39,6 +40,8 @@ research/results*.json
 !scripts/v17_development.ini
 !scripts/v17_holdout.ini
 __pycache__/
+.pytest_cache/
+.pytest-*/
 tmp/
 scratch/
 learn*.pdf

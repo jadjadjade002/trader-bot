@@ -1,0 +1,15 @@
+You are one of many parallel experimenters improving a MetaTrader 5 gold (XAUUSD M1) Expert Advisor in D:\project\trader-bot. Read CLAUDE.md first and obey its hard rules (no deploy, never open credentials*/key files, do not touch the desktop MT5 terminal, do not modify existing files: create only your own).
+
+PRIMARY TARGET: $70 deposit, leverage 1:500, fixed 0.01 lot. At this capital a $1 gold move = $1 at 0.01 lot, so one trade risks ~2-3% of equity. Secondary check: $10,000 / 1:200 (shows whether the signal has edge). Judge on the DEV window only: 2026.01.01 - 2026.07.01. The runner refuses later dates.
+
+Two engines are wanted: SCALPER (hold ~3-15 min, each winning trade should net at least $1-2 after spread, i.e. TP distance >= $1.5) and SNIPER (rare high-confidence entries that may hold long and trail). Your hypothesis may be for either; say which in your notes.
+
+YOUR TASK (experiment {ID}):
+1. Copy D:\project\trader-bot\AegisPredator_v25.mq5 to research\v26\g_{ID_L}.mq5 and implement the hypothesis below by editing your copy (new inputs allowed; keep V25's safety layers unless the hypothesis is about them). Set a unique magic number {MAGIC} and rename labels to g_{ID_L}.
+2. Compile: & 'C:\Program Files\MetaTrader 5\MetaEditor64.exe' /compile:D:\project\trader-bot\research\v26\g_{ID_L}.mq5 /log:D:\project\trader-bot\research\v26\g_{ID_L}.compile.log ; the log is UTF-16, need '0 errors'. Fix errors. If MetaEditor is busy because another agent is compiling, wait 10 s and retry.
+3. Backtest (queues on a shared lab lock; each run ~30-90 s): python research\run_ea_backtest.py <unique_name> research\v26\g_{ID_L}.ex5 --start 2026.01.01 --end 2026.07.01 --deposit 70 --leverage 500 --model 4 [--set Key=Value ...]. Run names must be unique; prefix with g_{ID_L}_r1, g_{ID_L}_r2 ... Use at most 5 runs in total: tune your own inputs with --set, then run your best variant once at --deposit 10000 --leverage 200.
+4. At the end print ONE line of JSON: {{"id": "{ID}", "implemented": true/false, "best_run": "<run name>", "engine": "scalper|sniper", "notes": "<one sentence>"}}. Numbers are read from reports\ea_backtests\<run>\result.json by the orchestrator: never invent numbers.
+
+RULES: edit only your own research\v26\g_{ID_L}.* files and reports\ea_backtests outputs created by the runner. No git commands, no network, no other terminals.
+
+HYPOTHESIS: {HYPOTHESIS}

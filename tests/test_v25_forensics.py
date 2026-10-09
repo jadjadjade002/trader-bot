@@ -47,7 +47,7 @@ class V25ForensicsTests(unittest.TestCase):
         self.assertEqual(len(base), 1)
 
     def test_v25_ea_has_mandatory_risk_and_no_profit_lock(self):
-        code = (Path(__file__).parents[1] / "QuantumTitan_v25_EvidenceFirst.mq5").read_text(encoding="utf-8")
+        code = (Path(__file__).parents[1] / "versions" / "QuantumTitan_v25_EvidenceFirst.mq5").read_text(encoding="utf-8")
         for token in ("InpEnableTrading=false", "InpMaxRiskPercent", "InpMaxDailyLossPercent",
                       "OrderCalcProfit", "OrderCalcMargin", "AnySymbolPosition", "V25 BLOCK"):
             self.assertIn(token, code)
@@ -55,7 +55,7 @@ class V25ForensicsTests(unittest.TestCase):
         self.assertNotIn("InpInvertSignals", code)
 
     def test_contract_probe_is_read_only(self):
-        code = (Path(__file__).parents[1] / "V25_ContractProbe.mq5").read_text(encoding="utf-8")
+        code = (Path(__file__).parents[1] / "versions" / "V25_ContractProbe.mq5").read_text(encoding="utf-8")
         for token in ("SYMBOL_TRADE_CONTRACT_SIZE", "SYMBOL_VOLUME_MIN", "SYMBOL_VOLUME_STEP",
                       "OrderCalcProfit", "OrderCalcMargin"):
             self.assertIn(token, code)
