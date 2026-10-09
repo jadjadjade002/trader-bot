@@ -60,7 +60,7 @@ trader-bot/
 ├── AegisPredator_v23.mq5                       # [ACTIVE] ซอร์สโค้ด EA หลัก Aegis Predator V23
 ├── AegisPredator_v23.ex5                       # [ACTIVE] ไบนารีคอมไพล์พร้อมใช้งาน
 ├── README.md                                   # เอกสารภาพรวม สถิติ และคู่มือการใช้งาน
-├── AGENTS.md / GEMINI.md                       # ข้อกำหนดและโหมดการทำงานของ Agent
+├── AGENTS.md / CLAUDE.md                       # ข้อกำหนดและโหมดการทำงานของ Agent
 ├── versions/                                   # โฟลเดอร์จัดเก็บเวอร์ชันเก่า (V9 – V23 เก่า, V25)
 │   ├── QuantumTitan_v23_LondonRetestBreakout.* # V23 (ต้นแบบแรกของสถาปัตยกรรม Circuit Breaker)
 │   ├── QuantumTitan_v16 - v22_*                # โมเดลวิจัยก่อนหน้า
